@@ -16,7 +16,7 @@ canvas { display:block; margin:20px auto; background:black; border-radius:10px; 
 #game2048 { display:block; margin:20px auto; width:400px; height:400px; position:relative; }
 .tile { width:90px; height:90px; position:absolute; display:flex; align-items:center; justify-content:center; font-size:2rem; font-weight:bold; border-radius:10px; color:white; transition: all 0.15s ease; }
 button.action { padding:10px 20px; border:none; border-radius:8px; background:#2563eb; color:white; cursor:pointer; margin-top:10px; }
-#score2048, #runnerScore, #dodgeScore { font-size:1.2rem; margin-top:10px; text-align:center; }
+#score2048, #dodgeScore { font-size:1.2rem; margin-top:10px; text-align:center; }
 </style>
 </head>
 <body>
@@ -30,7 +30,6 @@ button.action { padding:10px 20px; border:none; border-radius:8px; background:#2
   <button onclick="showGame('dodge')">Dodge</button>
   <button onclick="showGame('snake')">Snake</button>
   <button onclick="showGame('game2048')">2048</button>
-  <button onclick="showGame('runner')">Subway Runner</button>
 </nav>
 
 <main>
@@ -58,13 +57,6 @@ button.action { padding:10px 20px; border:none; border-radius:8px; background:#2
   <p id="score2048">Score: 0</p>
   <button class="action" onclick="init2048()">Restart</button>
 </section>
-
-<section id="runner" class="game">
-  <h2>Subway Runner</h2>
-  <canvas id="runnerCanvas" width="400" height="400"></canvas>
-  <p id="runnerScore">Score: 0</p>
-  <button class="action" onclick="startRunner()">Start</button>
-</section>
 </main>
 
 <script>
@@ -73,7 +65,6 @@ function showGame(id) {
   document.querySelectorAll('.game').forEach(g => g.style.display = 'none');
   document.getElementById(id).style.display = 'block';
   if(id!=='snake' && snakeTimer){ clearInterval(snakeTimer); snakeTimer=null; }
-  if(id!=='runner' && runnerTimer){ clearInterval(runnerTimer); runnerTimer=null; }
 }
 
 // ===== DODGE =====
@@ -110,24 +101,7 @@ function sLoop(){
   sctx.fillStyle='lime'; snake.forEach(p=>sctx.fillRect(p.x*20,p.y*20,20,20));
 }
 
-// ===== RUNNER =====
-const runnerCanvas=document.getElementById('runnerCanvas');
-const rctx=runnerCanvas.getContext('2d');
-let runnerX=175, runnerY=350, runnerJump=false, runnerObstacles=[], runnerScore=0, runnerTimer;
-function startRunner(){ runnerX=175; runnerY=350; runnerJump=false; runnerObstacles=[]; runnerScore=0; if(runnerTimer) clearInterval(runnerTimer); runnerTimer=setInterval(rLoop,30);}
-function rLoop(){
-  rctx.clearRect(0,0,400,400);
-  if(runnerJump) runnerY-=8; else if(runnerY<350) runnerY+=8;
-  if(runnerY>350) runnerY=350; runnerJump=false;
-  rctx.fillStyle='cyan'; rctx.fillRect(runnerX,runnerY,50,50);
-  if(Math.random()<0.03) runnerObstacles.push({x:Math.random()*350,y:-50});
-  rctx.fillStyle='red';
-  runnerObstacles.forEach(o=>{ o.y+=5; rctx.fillRect(o.x,o.y,50,50); if(runnerX<o.x+50 && runnerX+50>o.x && runnerY<o.y+50 && runnerY+50>runnerY){ alert('Runner Over! Score:'+runnerScore); clearInterval(runnerTimer); runnerTimer=null; } });
-  runnerObstacles=runnerObstacles.filter(o=>o.y<400);
-  runnerScore++; document.getElementById('runnerScore').innerText='Score: '+runnerScore;
-}
-
-// ===== 2048 with animation =====
+// ===== 2048 with animation and correct WASD =====
 let grid,score2048;
 const tileColors = {0:'#334155',2:'#eee4da',4:'#ede0c8',8:'#f2b179',16:'#f59563',32:'#f67c5f',
 64:'#f65e3b',128:'#edcf72',256:'#edcc61',512:'#edc850',1024:'#edc53f',2048:'#edc22e'};
@@ -162,16 +136,31 @@ function drawGrid(){
 function moveGrid(direction){
   let moved=false;
   function slide(row){ let arr=row.filter(n=>n!==0); while(arr.length<4) arr.push(0); return arr; }
-  function combine(row){ for(let i=0;i<3;i++){ if(row[i]!==0 && row[i]===row[i+1]){ row[i]*=2; score2048+=row[i]; row[i+1]=0; moved=true; } } return row; }
+  function combine(row){ 
+    for(let i=0;i<3;i++){ 
+      if(row[i]!==0 && row[i]===row[i+1]){ 
+        row[i]*=2; 
+        score2048+=row[i]; 
+        row[i+1]=0; 
+        moved=true; 
+      } 
+    } 
+    return row; 
+  }
+  const rotationMap = { 'w':3, 'a':0, 's':1, 'd':2 }; // correct mapping
+  const rotations = rotationMap[direction];
   const rotate = (mat) => mat[0].map((val,col)=>mat.map(r=>r[col]).reverse());
-  const rotations = { 'w':1, 'a':0, 's':3, 'd':2 }[direction];
+
   for(let k=0;k<rotations;k++) grid=rotate(grid);
+
   for(let y=0;y<4;y++){
     let row=grid[y]; let before=[...row];
     row=slide(row); row=combine(row); row=slide(row); grid[y]=row;
     if(!moved) moved=!row.every((v,i)=>v===before[i]);
   }
+
   for(let k=0;k<(4-rotations)%4;k++) grid=rotate(grid);
+
   if(moved){ addTile(); drawGrid(); }
   else if(isFull() && !canMove()){ alert('Game Over!'); }
 }
@@ -195,13 +184,6 @@ document.addEventListener('keydown', e=>{
     if(key==='s' && dir.y!==-1) dir={x:0,y:1};
     if(key==='a' && dir.x!==1) dir={x:-1,y:0};
     if(key==='d' && dir.x!==-1) dir={x:1,y:0};
-  }
-
-  // RUNNER
-  if(document.getElementById('runner').style.display==='block'){
-    if(key==='a') runnerX-=50;
-    if(key==='d') runnerX+=50;
-    if(key===' ') runnerJump=true;
   }
 
   // 2048 WASD
