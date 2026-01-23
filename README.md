@@ -15,7 +15,7 @@ main { max-width:900px; margin:30px auto; padding:0 20px; }
 canvas { display:block; margin:20px auto; background:black; border-radius:10px; }
 #game2048 { display:block; margin:20px auto; width:400px; }
 button.action { padding:10px 20px; border:none; border-radius:8px; background:#2563eb; color:white; cursor:pointer; margin-top:10px; }
-#score2048 { font-size:1.2rem; margin-top:10px; text-align:center; }
+#score2048, #runnerScore, #dodgeScore { font-size:1.2rem; margin-top:10px; text-align:center; }
 </style>
 </head>
 <body>
@@ -29,7 +29,7 @@ button.action { padding:10px 20px; border:none; border-radius:8px; background:#2
   <button onclick="showGame('dodge')">Dodge</button>
   <button onclick="showGame('snake')">Snake</button>
   <button onclick="showGame('game2048')">2048</button>
-  <button onclick="showGame('runner')">Subway Surfer</button>
+  <button onclick="showGame('runner')">Subway Runner</button>
 </nav>
 
 <main>
@@ -59,7 +59,7 @@ button.action { padding:10px 20px; border:none; border-radius:8px; background:#2
 </section>
 
 <section id="runner" class="game">
-  <h2>Subway Surfer–Style Runner</h2>
+  <h2>Subway Runner</h2>
   <canvas id="runnerCanvas" width="400" height="400"></canvas>
   <p id="runnerScore">Score: 0</p>
   <button class="action" onclick="startRunner()">Start</button>
@@ -75,7 +75,7 @@ function showGame(id) {
   if(id!=='runner' && runnerTimer){ clearInterval(runnerTimer); runnerTimer=null; }
 }
 
-// ===== DODGE GAME =====
+// ===== DODGE =====
 const dCanvas = document.getElementById('dodgeGame');
 const dctx = dCanvas.getContext('2d');
 let player, blocks, dScore, dOver, speedMul, spawn;
@@ -92,8 +92,16 @@ function dLoop(){
   blocks=blocks.filter(b=>b.y<500);
   dScore++; if(dScore%300===0){speedMul+=0.2;spawn+=0.005;}
   document.getElementById('dodgeScore').innerText='Score: '+dScore;
-  requestAnimationFrame(dLoop);
 }
+// DODGE INPUT
+document.addEventListener('keydown', e=>{
+  if(document.getElementById('dodge').style.display!=='block') return;
+  if(player){
+    if(e.key==='ArrowLeft') player.x-=20;
+    if(e.key==='ArrowRight') player.x+=20;
+    player.x=Math.max(0,Math.min(400-player.w,player.x));
+  }
+});
 
 // ===== SNAKE =====
 const sCanvas=document.getElementById('snakeGame');
@@ -109,13 +117,13 @@ function sLoop(){
   sctx.fillStyle='red'; sctx.fillRect(food.x*20,food.y*20,20,20);
   sctx.fillStyle='lime'; snake.forEach(p=>sctx.fillRect(p.x*20,p.y*20,20,20));
 }
-
-// ===== INPUT =====
-document.addEventListener('keydown',e=>{
-  const active=document.querySelector('.game:not([style*="display:none"])'); if(!active) return;
-  if(active.id==='dodge' && player){ if(e.key==='ArrowLeft') player.x-=20; if(e.key==='ArrowRight') player.x+=20; player.x=Math.max(0,Math.min(400-player.w,player.x));}
-  if(active.id==='snake'){ if(e.key==='ArrowUp' && dir.y!==1) dir={x:0,y:-1}; if(e.key==='ArrowDown' && dir.y!==-1) dir={x:0,y:1}; if(e.key==='ArrowLeft' && dir.x!==1) dir={x:-1,y:0}; if(e.key==='ArrowRight' && dir.x!==-1) dir={x:1,y:0}; }
-  if(active.id==='runner'){ if(e.key==='ArrowLeft') runnerX-=50; if(e.key==='ArrowRight') runnerX+=50; if(e.key===' ') runnerJump=true; }
+// SNAKE INPUT
+document.addEventListener('keydown', e=>{
+  if(document.getElementById('snake').style.display!=='block') return;
+  if(e.key==='ArrowUp' && dir.y!==1) dir={x:0,y:-1};
+  if(e.key==='ArrowDown' && dir.y!==-1) dir={x:0,y:1};
+  if(e.key==='ArrowLeft' && dir.x!==1) dir={x:-1,y:0};
+  if(e.key==='ArrowRight' && dir.x!==-1) dir={x:1,y:0};
 });
 
 // ===== 2048 =====
@@ -126,8 +134,9 @@ function init2048(){
 }
 function addTile(){ let empty=[]; for(let y=0;y<4;y++) for(let x=0;x<4;x++) if(grid[y][x]===0) empty.push([y,x]); if(empty.length===0) return; let [y,x]=empty[Math.floor(Math.random()*empty.length)]; grid[y][x]=Math.random()<0.9?2:4; }
 function drawGrid(){ let div=document.getElementById('game2048'); div.innerHTML=''; for(let y=0;y<4;y++){ let row=document.createElement('div'); row.style.display='flex'; for(let x=0;x<4;x++){ let cell=document.createElement('div'); cell.textContent=grid[y][x]||''; cell.style.width='90px'; cell.style.height='90px'; cell.style.margin='5px'; cell.style.background='#334155'; cell.style.display='flex'; cell.style.alignItems='center'; cell.style.justifyContent='center'; cell.style.fontSize='2rem'; cell.style.fontWeight='bold'; row.appendChild(cell);} div.appendChild(row);} document.getElementById('score2048').innerText='Score: '+score2048; }
-document.addEventListener('keydown', e => {
-  const active=document.querySelector('.game:not([style*="display:none"])'); if(!active || active.id!=='game2048') return;
+// 2048 INPUT
+document.addEventListener('keydown', e=>{
+  if(document.getElementById('game2048').style.display!=='block') return;
   let moved=false;
   const rotate=function(mat){ return mat[0].map((val,col)=>mat.map(row=>row[col]).reverse()); };
   const combine=function(row){ for(let i=row.length-1;i>0;i--){ if(row[i]!==0 && row[i]===row[i-1]){ row[i]*=2; score2048+=row[i]; row[i-1]=0; moved=true; } } return row; };
@@ -140,24 +149,29 @@ document.addEventListener('keydown', e => {
   if(moved) addTile();
 });
 
-// ===== SUBWAY SURFER =====
+// ===== RUNNER =====
 const runnerCanvas=document.getElementById('runnerCanvas');
 const rctx=runnerCanvas.getContext('2d');
 let runnerX=175, runnerY=350, runnerJump=false, runnerObstacles=[], runnerScore=0, runnerTimer;
 function startRunner(){ runnerX=175; runnerY=350; runnerJump=false; runnerObstacles=[]; runnerScore=0; if(runnerTimer) clearInterval(runnerTimer); runnerTimer=setInterval(rLoop,30);}
 function rLoop(){
   rctx.clearRect(0,0,400,400);
-  // Draw player
   if(runnerJump) runnerY-=8; else if(runnerY<350) runnerY+=8;
   if(runnerY>350) runnerY=350; runnerJump=false;
   rctx.fillStyle='cyan'; rctx.fillRect(runnerX,runnerY,50,50);
-  // Obstacles
   if(Math.random()<0.03) runnerObstacles.push({x:Math.random()*350,y:-50});
   rctx.fillStyle='red';
   runnerObstacles.forEach(o=>{ o.y+=5; rctx.fillRect(o.x,o.y,50,50); if(runnerX<o.x+50 && runnerX+50>o.x && runnerY<o.y+50 && runnerY+50>o.y){ alert('Runner Over! Score:'+runnerScore); clearInterval(runnerTimer); runnerTimer=null; } });
   runnerObstacles=runnerObstacles.filter(o=>o.y<400);
   runnerScore++; document.getElementById('runnerScore').innerText='Score: '+runnerScore;
 }
+// RUNNER INPUT
+document.addEventListener('keydown', e=>{
+  if(document.getElementById('runner').style.display!=='block') return;
+  if(e.key==='ArrowLeft') runnerX-=50;
+  if(e.key==='ArrowRight') runnerX+=50;
+  if(e.key===' ') runnerJump=true;
+});
 </script>
 </body>
 </html>
