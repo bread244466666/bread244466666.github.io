@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
@@ -103,7 +103,6 @@ function dLoop(){
   dScore++; 
   if(dScore%300===0){ speedMul+=0.2; spawn+=0.005; }
   document.getElementById('dodgeScore').innerText='Score: '+dScore;
-  requestAnimationFrame(dLoop);
 }
 
 // ===== SNAKE =====
@@ -193,45 +192,71 @@ function moveGrid(direction){
 function isFull(){ return grid.flat().every(v=>v!==0); }
 function canMove(){ for(let y=0;y<4;y++) for(let x=0;x<4;x++){ if(x<3 && grid[y][x]===grid[y][x+1]) return true; if(y<3 && grid[y][x]===grid[y+1][x]) return true; } return false; }
 
-// ===== ALIEN SHOOTER =====
+// ===== ALIEN SHOOTER (NEAT VERSION) =====
 const aCanvas = document.getElementById('alienGame');
 const actx = aCanvas.getContext('2d');
 let aPlayer, aliens, bullets, aScore, alienTimer, alienOver, alienSpeed;
+
 function startAlien(){
-  aPlayer={x:180,y:460,w:40,h:20}; aliens=[]; bullets=[]; aScore=0; alienOver=false; alienSpeed=1;
+  aPlayer = {x:200, y:480, w:20, h:20};
+  aliens = []; bullets = []; aScore = 0; alienOver = false; alienSpeed = 1;
   document.getElementById('scoreAlien').innerText='Score: 0';
   if(alienTimer) clearInterval(alienTimer);
-  alienTimer=setInterval(alienLoop,20);
+  alienTimer = setInterval(alienLoop,20);
   spawnAlien();
 }
+
 function spawnAlien(){
   if(alienOver) return;
-  const x = Math.random()*360;
-  aliens.push({x:x,y:0,w:40,h:20});
-  setTimeout(spawnAlien, 1000 - aScore*5);
+  const x = Math.random()*360 + 20;
+  aliens.push({x:x,y:0,r:15});
+  setTimeout(spawnAlien,1200);
 }
+
 function alienLoop(){
   if(alienOver) return;
   actx.clearRect(0,0,400,500);
-  // Draw player
-  actx.fillStyle='cyan'; actx.fillRect(aPlayer.x,aPlayer.y,aPlayer.w,aPlayer.h);
-  // Move and draw bullets
-  bullets.forEach((b,i)=>{ 
-    b.y-=5; actx.fillStyle='yellow'; actx.fillRect(b.x,b.y,5,10);
-    aliens.forEach((al,j)=>{ if(b.x<b.x+5 && b.y<b.y+10 && b.x+5>al.x && b.y<al.y+al.h && b.y+10>al.y){ aliens.splice(j,1); bullets.splice(i,1); aScore+=10; document.getElementById('scoreAlien').innerText='Score: '+aScore; }});
+
+  // Draw player triangle
+  actx.fillStyle='cyan';
+  actx.beginPath();
+  actx.moveTo(aPlayer.x, aPlayer.y);
+  actx.lineTo(aPlayer.x - aPlayer.w, aPlayer.y + aPlayer.h);
+  actx.lineTo(aPlayer.x + aPlayer.w, aPlayer.y + aPlayer.h);
+  actx.closePath();
+  actx.fill();
+
+  // Draw bullets
+  bullets.forEach((b,i)=>{
+    b.y -=6;
+    actx.strokeStyle='yellow';
+    actx.lineWidth=2;
+    actx.beginPath();
+    actx.moveTo(b.x,b.y);
+    actx.lineTo(b.x,b.y-10);
+    actx.stroke();
+
+    aliens.forEach((al,j)=>{
+      if(Math.hypot(b.x-al.x,b.y-al.y)<al.r){ aliens.splice(j,1); bullets.splice(i,1); aScore+=10; document.getElementById('scoreAlien').innerText='Score: '+aScore; }
+    });
   });
   bullets = bullets.filter(b=>b.y>0);
-  // Move and draw aliens
-  aliens.forEach((al,i)=>{ 
-    al.y+=alienSpeed; actx.fillStyle='red'; actx.fillRect(al.x,al.y,al.w,al.h); 
-    if(al.y+al.h>=500){ alienOver=true; alert('Game Over! Score: '+aScore); }
+
+  // Draw and move aliens
+  aliens.forEach((al,i)=>{
+    al.y += alienSpeed;
+    actx.fillStyle='red';
+    actx.beginPath();
+    actx.arc(al.x,al.y,al.r,0,Math.PI*2);
+    actx.fill();
+    if(al.y + al.r >= 500){ alienOver=true; alert('Game Over! Score: '+aScore); }
   });
-  alienSpeed+=0.001;
+  alienSpeed += 0.0005;
 }
 
 // ===== GLOBAL INPUT =====
-document.addEventListener('keydown', e=>{
-  const key = e.key.toLowerCase();
+document.addEventListener('keydown',e=>{
+  const key=e.key.toLowerCase();
   // DODGE
   if(document.getElementById('dodge').style.display==='block'){
     if(key==='a') player.x-=20;
@@ -249,12 +274,12 @@ document.addEventListener('keydown', e=>{
   if(document.getElementById('game2048').style.display==='block'){
     if(['w','a','s','d'].includes(key)) moveGrid(key);
   }
-  // ALIEN
+  // ALIEN SHOOTER
   if(document.getElementById('alien').style.display==='block'){
-    if((key==='a'||e.key==='ArrowLeft')) aPlayer.x-=5;
-    if((key==='d'||e.key==='ArrowRight')) aPlayer.x+=5;
+    if(key==='a'||e.key==='ArrowLeft') aPlayer.x-=5;
+    if(key==='d'||e.key==='ArrowRight') aPlayer.x+=5;
     aPlayer.x=Math.max(0,Math.min(400-aPlayer.w,aPlayer.x));
-    if(e.key===' '){ bullets.push({x:aPlayer.x+17,y:aPlayer.y}); }
+    if(e.key===' ') bullets.push({x:aPlayer.x, y:aPlayer.y});
   }
 });
 </script>
