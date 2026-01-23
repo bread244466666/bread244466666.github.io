@@ -93,12 +93,12 @@ function dLoop(){
   dScore++; if(dScore%300===0){speedMul+=0.2;spawn+=0.005;}
   document.getElementById('dodgeScore').innerText='Score: '+dScore;
 }
-// DODGE INPUT
+// DODGE INPUT (WASD)
 document.addEventListener('keydown', e=>{
   if(document.getElementById('dodge').style.display!=='block') return;
   if(player){
-    if(e.key==='ArrowLeft') player.x-=20;
-    if(e.key==='ArrowRight') player.x+=20;
+    if(e.key.toLowerCase()==='a') player.x-=20;
+    if(e.key.toLowerCase()==='d') player.x+=20;
     player.x=Math.max(0,Math.min(400-player.w,player.x));
   }
 });
@@ -117,16 +117,16 @@ function sLoop(){
   sctx.fillStyle='red'; sctx.fillRect(food.x*20,food.y*20,20,20);
   sctx.fillStyle='lime'; snake.forEach(p=>sctx.fillRect(p.x*20,p.y*20,20,20));
 }
-// SNAKE INPUT
+// SNAKE INPUT (WASD)
 document.addEventListener('keydown', e=>{
   if(document.getElementById('snake').style.display!=='block') return;
-  if(e.key==='ArrowUp' && dir.y!==1) dir={x:0,y:-1};
-  if(e.key==='ArrowDown' && dir.y!==-1) dir={x:0,y:1};
-  if(e.key==='ArrowLeft' && dir.x!==1) dir={x:-1,y:0};
-  if(e.key==='ArrowRight' && dir.x!==-1) dir={x:1,y:0};
+  if(e.key.toLowerCase()==='w' && dir.y!==1) dir={x:0,y:-1};
+  if(e.key.toLowerCase()==='s' && dir.y!==-1) dir={x:0,y:1};
+  if(e.key.toLowerCase()==='a' && dir.x!==1) dir={x:-1,y:0};
+  if(e.key.toLowerCase()==='d' && dir.x!==-1) dir={x:1,y:0};
 });
 
-// ===== 2048 =====
+// ===== 2048 ===== (arrows still fine)
 let grid,score2048;
 function init2048(){
   grid=[[],[],[],[]]; for(let y=0;y<4;y++) for(let x=0;x<4;x++) grid[y][x]=0;
@@ -156,8 +156,6 @@ function drawGrid(){
   } 
   document.getElementById('score2048').innerText='Score: '+score2048; 
 }
-
-// 2048 INPUT - Fixed
 function moveGrid(direction) {
   let moved=false;
 
@@ -193,7 +191,6 @@ function moveGrid(direction) {
 
   if(moved){ addTile(); drawGrid(); }
 }
-
 document.addEventListener('keydown', e=>{
   if(document.getElementById('game2048').style.display!=='block') return;
   if(['ArrowLeft','ArrowUp','ArrowRight','ArrowDown'].includes(e.key)){
@@ -217,11 +214,11 @@ function rLoop(){
   runnerObstacles=runnerObstacles.filter(o=>o.y<400);
   runnerScore++; document.getElementById('runnerScore').innerText='Score: '+runnerScore;
 }
-// RUNNER INPUT
+// RUNNER INPUT (WASD + Space)
 document.addEventListener('keydown', e=>{
   if(document.getElementById('runner').style.display!=='block') return;
-  if(e.key==='ArrowLeft') runnerX-=50;
-  if(e.key==='ArrowRight') runnerX+=50;
+  if(e.key.toLowerCase()==='a') runnerX-=50;
+  if(e.key.toLowerCase()==='d') runnerX+=50;
   if(e.key===' ') runnerJump=true;
 });
 </script>
