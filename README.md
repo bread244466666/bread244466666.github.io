@@ -13,10 +13,10 @@ nav button:hover { background:#1d4ed8; }
 main { max-width:900px; margin:30px auto; padding:0 20px; }
 .game { display:none; background:#020617; border-radius:14px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
 canvas { display:block; margin:20px auto; background:black; border-radius:10px; }
+button.action { padding:10px 20px; border:none; border-radius:8px; background:#2563eb; color:white; cursor:pointer; margin-top:10px; }
+#score2048, #dodgeScore, #scoreAlien { font-size:1.2rem; margin-top:10px; text-align:center; }
 #game2048 { display:block; margin:20px auto; width:400px; height:400px; position:relative; }
 .tile { width:90px; height:90px; position:absolute; display:flex; align-items:center; justify-content:center; font-size:2rem; font-weight:bold; border-radius:10px; color:white; transition: all 0.15s ease; }
-button.action { padding:10px 20px; border:none; border-radius:8px; background:#2563eb; color:white; cursor:pointer; margin-top:10px; }
-#score2048, #dodgeScore { font-size:1.2rem; margin-top:10px; text-align:center; }
 </style>
 </head>
 <body>
@@ -30,6 +30,7 @@ button.action { padding:10px 20px; border:none; border-radius:8px; background:#2
   <button onclick="showGame('dodge')">Dodge</button>
   <button onclick="showGame('snake')">Snake</button>
   <button onclick="showGame('game2048')">2048</button>
+  <button onclick="showGame('alien')">Alien Shooter</button>
 </nav>
 
 <main>
@@ -57,6 +58,13 @@ button.action { padding:10px 20px; border:none; border-radius:8px; background:#2
   <p id="score2048">Score: 0</p>
   <button class="action" onclick="init2048()">Restart</button>
 </section>
+
+<section id="alien" class="game">
+  <h2>Alien Shooter</h2>
+  <canvas id="alienGame" width="400" height="500"></canvas>
+  <button class="action" onclick="startAlien()">Start</button>
+  <p id="scoreAlien">Score: 0</p>
+</section>
 </main>
 
 <script>
@@ -65,6 +73,7 @@ function showGame(id) {
   document.querySelectorAll('.game').forEach(g => g.style.display = 'none');
   document.getElementById(id).style.display = 'block';
   if(id!=='snake' && snakeTimer){ clearInterval(snakeTimer); snakeTimer=null; }
+  if(id!=='alien' && alienTimer){ clearInterval(alienTimer); alienTimer=null; }
 }
 
 // ===== DODGE =====
@@ -184,17 +193,51 @@ function moveGrid(direction){
 function isFull(){ return grid.flat().every(v=>v!==0); }
 function canMove(){ for(let y=0;y<4;y++) for(let x=0;x<4;x++){ if(x<3 && grid[y][x]===grid[y][x+1]) return true; if(y<3 && grid[y][x]===grid[y+1][x]) return true; } return false; }
 
-// ===== GLOBAL WASD INPUT =====
+// ===== ALIEN SHOOTER =====
+const aCanvas = document.getElementById('alienGame');
+const actx = aCanvas.getContext('2d');
+let aPlayer, aliens, bullets, aScore, alienTimer, alienOver, alienSpeed;
+function startAlien(){
+  aPlayer={x:180,y:460,w:40,h:20}; aliens=[]; bullets=[]; aScore=0; alienOver=false; alienSpeed=1;
+  document.getElementById('scoreAlien').innerText='Score: 0';
+  if(alienTimer) clearInterval(alienTimer);
+  alienTimer=setInterval(alienLoop,20);
+  spawnAlien();
+}
+function spawnAlien(){
+  if(alienOver) return;
+  const x = Math.random()*360;
+  aliens.push({x:x,y:0,w:40,h:20});
+  setTimeout(spawnAlien, 1000 - aScore*5);
+}
+function alienLoop(){
+  if(alienOver) return;
+  actx.clearRect(0,0,400,500);
+  // Draw player
+  actx.fillStyle='cyan'; actx.fillRect(aPlayer.x,aPlayer.y,aPlayer.w,aPlayer.h);
+  // Move and draw bullets
+  bullets.forEach((b,i)=>{ 
+    b.y-=5; actx.fillStyle='yellow'; actx.fillRect(b.x,b.y,5,10);
+    aliens.forEach((al,j)=>{ if(b.x<b.x+5 && b.y<b.y+10 && b.x+5>al.x && b.y<al.y+al.h && b.y+10>al.y){ aliens.splice(j,1); bullets.splice(i,1); aScore+=10; document.getElementById('scoreAlien').innerText='Score: '+aScore; }});
+  });
+  bullets = bullets.filter(b=>b.y>0);
+  // Move and draw aliens
+  aliens.forEach((al,i)=>{ 
+    al.y+=alienSpeed; actx.fillStyle='red'; actx.fillRect(al.x,al.y,al.w,al.h); 
+    if(al.y+al.h>=500){ alienOver=true; alert('Game Over! Score: '+aScore); }
+  });
+  alienSpeed+=0.001;
+}
+
+// ===== GLOBAL INPUT =====
 document.addEventListener('keydown', e=>{
   const key = e.key.toLowerCase();
-
   // DODGE
   if(document.getElementById('dodge').style.display==='block'){
     if(key==='a') player.x-=20;
     if(key==='d') player.x+=20;
     player.x=Math.max(0,Math.min(400-player.w,player.x));
   }
-
   // SNAKE
   if(document.getElementById('snake').style.display==='block'){
     if(key==='w' && dir.y!==1) dir={x:0,y:-1};
@@ -202,10 +245,16 @@ document.addEventListener('keydown', e=>{
     if(key==='a' && dir.x!==1) dir={x:-1,y:0};
     if(key==='d' && dir.x!==-1) dir={x:1,y:0};
   }
-
-  // 2048 WASD
+  // 2048
   if(document.getElementById('game2048').style.display==='block'){
     if(['w','a','s','d'].includes(key)) moveGrid(key);
+  }
+  // ALIEN
+  if(document.getElementById('alien').style.display==='block'){
+    if((key==='a'||e.key==='ArrowLeft')) aPlayer.x-=5;
+    if((key==='d'||e.key==='ArrowRight')) aPlayer.x+=5;
+    aPlayer.x=Math.max(0,Math.min(400-aPlayer.w,aPlayer.x));
+    if(e.key===' '){ bullets.push({x:aPlayer.x+17,y:aPlayer.y}); }
   }
 });
 </script>
