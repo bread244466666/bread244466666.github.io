@@ -1,4 +1,4 @@
-
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
@@ -41,7 +41,7 @@ button.action { padding:10px 20px; border:none; border-radius:8px; background:#2
 
 <section id="dodge" class="game">
   <h2>Dodge the Blocks</h2>
-  <canvas id="dodgeGame" width="400" height="500"></canvas>
+  <canvas id="dodgeGame" width="400" height="450"></canvas>
   <button class="action" onclick="startDodge()">Start</button>
   <p id="dodgeScore">Score: 0</p>
 </section>
@@ -61,7 +61,7 @@ button.action { padding:10px 20px; border:none; border-radius:8px; background:#2
 
 <section id="alien" class="game">
   <h2>Alien Shooter</h2>
-  <canvas id="alienGame" width="400" height="500"></canvas>
+  <canvas id="alienGame" width="400" height="450"></canvas>
   <button class="action" onclick="startAlien()">Start</button>
   <p id="scoreAlien">Score: 0</p>
 </section>
@@ -81,27 +81,27 @@ const dCanvas = document.getElementById('dodgeGame');
 const dctx = dCanvas.getContext('2d');
 let player, blocks, dScore, dOver, speedMul, spawn;
 function startDodge(){
-  player={x:180,y:460,w:40,h:20}; blocks=[]; dScore=0; speedMul=1; spawn=0.03; dOver=false;
+  player={x:180,y:420,w:40,h:20}; blocks=[]; dScore=0; speedMul=1; spawn=0.03; dOver=false;
   document.getElementById('dodgeScore').innerText='Score: 0';
   requestAnimationFrame(dLoop);
 }
 function dLoop(){
   if(dOver) return;
-  dctx.clearRect(0,0,400,500);
-  dctx.fillStyle='cyan'; dctx.fillRect(player.x,player.y,player.w,player.h);
-  if(Math.random()<spawn) blocks.push({x:Math.random()*360,y:0,s:4*speedMul});
+  dctx.clearRect(0,0,dCanvas.width,dCanvas.height);
+  dctx.fillStyle='cyan';
+  dctx.fillRect(player.x,player.y,player.w,player.h);
+
+  if(Math.random()<spawn) blocks.push({x:Math.random()*(dCanvas.width-40),y:0,s:4*speedMul});
   dctx.fillStyle='red';
-  blocks.forEach(b=>{
-    b.y+=b.s; 
+  blocks.forEach((b)=>{
+    b.y+=b.s;
     dctx.fillRect(b.x,b.y,40,40);
     if(b.x < player.x + player.w && b.x + 40 > player.x && b.y < player.y + player.h && b.y + 40 > player.y){
-      dOver=true; 
-      alert('Game Over! Score: '+dScore);
+      dOver=true; alert('Game Over! Score: '+dScore);
     }
   });
-  blocks = blocks.filter(b => b.y<500);
-  dScore++; 
-  if(dScore%300===0){ speedMul+=0.2; spawn+=0.005; }
+  blocks = blocks.filter(b=>b.y < dCanvas.height);
+  dScore++; if(dScore%300===0){ speedMul+=0.2; spawn+=0.005; }
   document.getElementById('dodgeScore').innerText='Score: '+dScore;
 }
 
@@ -175,49 +175,41 @@ function moveGrid(direction){
   const rotationMap = { 'w':3, 'a':0, 's':1, 'd':2 };
   const rotations = rotationMap[direction];
   const rotate = (mat) => mat[0].map((val,col)=>mat.map(r=>r[col]).reverse());
-
   for(let k=0;k<rotations;k++) grid=rotate(grid);
-
   for(let y=0;y<4;y++){
     let row=grid[y]; let before=[...row];
     row=slide(row); row=combine(row); row=slide(row); grid[y]=row;
     if(!moved) moved=!row.every((v,i)=>v===before[i]);
   }
-
   for(let k=0;k<(4-rotations)%4;k++) grid=rotate(grid);
-
   if(moved){ addTile(); drawGrid(); }
   else if(isFull() && !canMove()){ alert('Game Over!'); }
 }
 function isFull(){ return grid.flat().every(v=>v!==0); }
 function canMove(){ for(let y=0;y<4;y++) for(let x=0;x<4;x++){ if(x<3 && grid[y][x]===grid[y][x+1]) return true; if(y<3 && grid[y][x]===grid[y+1][x]) return true; } return false; }
 
-// ===== ALIEN SHOOTER (NEAT VERSION) =====
+// ===== ALIEN SHOOTER =====
 const aCanvas = document.getElementById('alienGame');
 const actx = aCanvas.getContext('2d');
 let aPlayer, aliens, bullets, aScore, alienTimer, alienOver, alienSpeed;
-
 function startAlien(){
-  aPlayer = {x:200, y:480, w:20, h:20};
+  aPlayer = {x:200, y:420, w:20, h:20};
   aliens = []; bullets = []; aScore = 0; alienOver = false; alienSpeed = 1;
   document.getElementById('scoreAlien').innerText='Score: 0';
   if(alienTimer) clearInterval(alienTimer);
   alienTimer = setInterval(alienLoop,20);
   spawnAlien();
 }
-
 function spawnAlien(){
   if(alienOver) return;
+  if(aliens.length >= 5){ setTimeout(spawnAlien,1800); return; }
   const x = Math.random()*360 + 20;
   aliens.push({x:x,y:0,r:15});
-  setTimeout(spawnAlien,1200);
+  setTimeout(spawnAlien,1800);
 }
-
 function alienLoop(){
   if(alienOver) return;
-  actx.clearRect(0,0,400,500);
-
-  // Draw player triangle
+  actx.clearRect(0,0,400,450);
   actx.fillStyle='cyan';
   actx.beginPath();
   actx.moveTo(aPlayer.x, aPlayer.y);
@@ -225,8 +217,6 @@ function alienLoop(){
   actx.lineTo(aPlayer.x + aPlayer.w, aPlayer.y + aPlayer.h);
   actx.closePath();
   actx.fill();
-
-  // Draw bullets
   bullets.forEach((b,i)=>{
     b.y -=6;
     actx.strokeStyle='yellow';
@@ -235,21 +225,18 @@ function alienLoop(){
     actx.moveTo(b.x,b.y);
     actx.lineTo(b.x,b.y-10);
     actx.stroke();
-
     aliens.forEach((al,j)=>{
       if(Math.hypot(b.x-al.x,b.y-al.y)<al.r){ aliens.splice(j,1); bullets.splice(i,1); aScore+=10; document.getElementById('scoreAlien').innerText='Score: '+aScore; }
     });
   });
   bullets = bullets.filter(b=>b.y>0);
-
-  // Draw and move aliens
-  aliens.forEach((al,i)=>{
+  aliens.forEach((al)=>{
     al.y += alienSpeed;
     actx.fillStyle='red';
     actx.beginPath();
     actx.arc(al.x,al.y,al.r,0,Math.PI*2);
     actx.fill();
-    if(al.y + al.r >= 500){ alienOver=true; alert('Game Over! Score: '+aScore); }
+    if(al.y + al.r >= 450){ alienOver=true; alert('Game Over! Score: '+aScore); }
   });
   alienSpeed += 0.0005;
 }
@@ -261,7 +248,7 @@ document.addEventListener('keydown',e=>{
   if(document.getElementById('dodge').style.display==='block'){
     if(key==='a') player.x-=20;
     if(key==='d') player.x+=20;
-    player.x=Math.max(0,Math.min(400-player.w,player.x));
+    player.x=Math.max(0,Math.min(dCanvas.width-player.w,player.x));
   }
   // SNAKE
   if(document.getElementById('snake').style.display==='block'){
