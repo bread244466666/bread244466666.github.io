@@ -13,8 +13,10 @@ nav button:hover { background:#1d4ed8; }
 main { max-width:900px; margin:30px auto; padding:0 20px; }
 .game { display:none; background:#020617; border-radius:14px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
 canvas { display:block; margin:20px auto; background:black; border-radius:10px; }
+#game2048 { display:block; margin:20px auto; width:400px; height:400px; position:relative; }
+.tile { width:90px; height:90px; position:absolute; display:flex; align-items:center; justify-content:center; font-size:2rem; font-weight:bold; border-radius:10px; color:white; transition: all 0.15s ease; }
 button.action { padding:10px 20px; border:none; border-radius:8px; background:#2563eb; color:white; cursor:pointer; margin-top:10px; }
-#dodgeScore { font-size:1.2rem; margin-top:10px; text-align:center; }
+#score2048, #dodgeScore { font-size:1.2rem; margin-top:10px; text-align:center; }
 </style>
 </head>
 <body>
@@ -27,6 +29,7 @@ button.action { padding:10px 20px; border:none; border-radius:8px; background:#2
   <button onclick="showGame('home')">Home</button>
   <button onclick="showGame('dodge')">Dodge</button>
   <button onclick="showGame('snake')">Snake</button>
+  <button onclick="showGame('game2048')">2048</button>
 </nav>
 
 <main>
@@ -46,6 +49,13 @@ button.action { padding:10px 20px; border:none; border-radius:8px; background:#2
   <h2>Snake</h2>
   <canvas id="snakeGame" width="400" height="400"></canvas>
   <button class="action" onclick="startSnake()">Start</button>
+</section>
+
+<section id="game2048" class="game">
+  <h2>2048</h2>
+  <div id="game2048"></div>
+  <p id="score2048">Score: 0</p>
+  <button class="action" onclick="init2048()">Restart</button>
 </section>
 </main>
 
@@ -69,11 +79,8 @@ function startDodge(){
 function dLoop(){
   if(dOver) return;
   dctx.clearRect(0,0,400,500);
-  // Draw player
   dctx.fillStyle='cyan'; dctx.fillRect(player.x,player.y,player.w,player.h);
-  // Spawn blocks
   if(Math.random()<spawn) blocks.push({x:Math.random()*360,y:0,s:4*speedMul});
-  // Draw blocks and collision
   dctx.fillStyle='red';
   blocks.forEach(b=>{
     b.y+=b.s; 
@@ -111,6 +118,72 @@ function sLoop(){
   sctx.fillStyle='lime'; snake.forEach(p=>sctx.fillRect(p.x*20,p.y*20,20,20));
 }
 
+// ===== 2048 =====
+let grid,score2048;
+const tileColors = {0:'#334155',2:'#eee4da',4:'#ede0c8',8:'#f2b179',16:'#f59563',32:'#f67c5f',
+64:'#f65e3b',128:'#edcf72',256:'#edcc61',512:'#edc850',1024:'#edc53f',2048:'#edc22e'};
+function init2048(){
+  grid=[[],[],[],[]]; for(let y=0;y<4;y++) for(let x=0;x<4;x++) grid[y][x]=0;
+  score2048=0; addTile(); addTile(); drawGrid();
+}
+function addTile(){ 
+  let empty=[]; 
+  for(let y=0;y<4;y++) for(let x=0;x<4;x++) if(grid[y][x]===0) empty.push([y,x]); 
+  if(empty.length===0) return; 
+  let [y,x]=empty[Math.floor(Math.random()*empty.length)]; 
+  grid[y][x]=Math.random()<0.9?2:4; 
+}
+function drawGrid(){ 
+  const div=document.getElementById('game2048'); div.innerHTML='';
+  for(let y=0;y<4;y++){ 
+    for(let x=0;x<4;x++){ 
+      const value=grid[y][x];
+      if(value===0) continue;
+      let tile=document.createElement('div');
+      tile.className='tile';
+      tile.style.backgroundColor=tileColors[value]||'#3c3a32';
+      tile.style.left=(x*100+5)+'px';
+      tile.style.top=(y*100+5)+'px';
+      tile.textContent=value;
+      div.appendChild(tile);
+    }
+  }
+  document.getElementById('score2048').innerText='Score: '+score2048;
+}
+function moveGrid(direction){
+  let moved=false;
+  function slide(row){ let arr=row.filter(n=>n!==0); while(arr.length<4) arr.push(0); return arr; }
+  function combine(row){ 
+    for(let i=0;i<3;i++){ 
+      if(row[i]!==0 && row[i]===row[i+1]){ 
+        row[i]*=2; 
+        score2048+=row[i]; 
+        row[i+1]=0; 
+        moved=true; 
+      } 
+    } 
+    return row; 
+  }
+  const rotationMap = { 'w':3, 'a':0, 's':1, 'd':2 };
+  const rotations = rotationMap[direction];
+  const rotate = (mat) => mat[0].map((val,col)=>mat.map(r=>r[col]).reverse());
+
+  for(let k=0;k<rotations;k++) grid=rotate(grid);
+
+  for(let y=0;y<4;y++){
+    let row=grid[y]; let before=[...row];
+    row=slide(row); row=combine(row); row=slide(row); grid[y]=row;
+    if(!moved) moved=!row.every((v,i)=>v===before[i]);
+  }
+
+  for(let k=0;k<(4-rotations)%4;k++) grid=rotate(grid);
+
+  if(moved){ addTile(); drawGrid(); }
+  else if(isFull() && !canMove()){ alert('Game Over!'); }
+}
+function isFull(){ return grid.flat().every(v=>v!==0); }
+function canMove(){ for(let y=0;y<4;y++) for(let x=0;x<4;x++){ if(x<3 && grid[y][x]===grid[y][x+1]) return true; if(y<3 && grid[y][x]===grid[y+1][x]) return true; } return false; }
+
 // ===== GLOBAL WASD INPUT =====
 document.addEventListener('keydown', e=>{
   const key = e.key.toLowerCase();
@@ -128,6 +201,11 @@ document.addEventListener('keydown', e=>{
     if(key==='s' && dir.y!==-1) dir={x:0,y:1};
     if(key==='a' && dir.x!==1) dir={x:-1,y:0};
     if(key==='d' && dir.x!==-1) dir={x:1,y:0};
+  }
+
+  // 2048 WASD
+  if(document.getElementById('game2048').style.display==='block'){
+    if(['w','a','s','d'].includes(key)) moveGrid(key);
   }
 });
 </script>
