@@ -132,21 +132,73 @@ function init2048(){
   grid=[[],[],[],[]]; for(let y=0;y<4;y++) for(let x=0;x<4;x++) grid[y][x]=0;
   score2048=0; addTile(); addTile(); drawGrid();
 }
-function addTile(){ let empty=[]; for(let y=0;y<4;y++) for(let x=0;x<4;x++) if(grid[y][x]===0) empty.push([y,x]); if(empty.length===0) return; let [y,x]=empty[Math.floor(Math.random()*empty.length)]; grid[y][x]=Math.random()<0.9?2:4; }
-function drawGrid(){ let div=document.getElementById('game2048'); div.innerHTML=''; for(let y=0;y<4;y++){ let row=document.createElement('div'); row.style.display='flex'; for(let x=0;x<4;x++){ let cell=document.createElement('div'); cell.textContent=grid[y][x]||''; cell.style.width='90px'; cell.style.height='90px'; cell.style.margin='5px'; cell.style.background='#334155'; cell.style.display='flex'; cell.style.alignItems='center'; cell.style.justifyContent='center'; cell.style.fontSize='2rem'; cell.style.fontWeight='bold'; row.appendChild(cell);} div.appendChild(row);} document.getElementById('score2048').innerText='Score: '+score2048; }
-// 2048 INPUT
+function addTile(){ 
+  let empty=[]; 
+  for(let y=0;y<4;y++) for(let x=0;x<4;x++) if(grid[y][x]===0) empty.push([y,x]); 
+  if(empty.length===0) return; 
+  let [y,x]=empty[Math.floor(Math.random()*empty.length)]; 
+  grid[y][x]=Math.random()<0.9?2:4; 
+}
+function drawGrid(){ 
+  let div=document.getElementById('game2048'); div.innerHTML=''; 
+  for(let y=0;y<4;y++){ 
+    let row=document.createElement('div'); row.style.display='flex'; 
+    for(let x=0;x<4;x++){ 
+      let cell=document.createElement('div'); 
+      cell.textContent=grid[y][x]||''; 
+      cell.style.width='90px'; cell.style.height='90px'; cell.style.margin='5px'; 
+      cell.style.background='#334155'; cell.style.display='flex'; 
+      cell.style.alignItems='center'; cell.style.justifyContent='center'; 
+      cell.style.fontSize='2rem'; cell.style.fontWeight='bold'; 
+      row.appendChild(cell);
+    } 
+    div.appendChild(row);
+  } 
+  document.getElementById('score2048').innerText='Score: '+score2048; 
+}
+
+// 2048 INPUT - Fixed
+function moveGrid(direction) {
+  let moved=false;
+
+  function slide(row){
+    let arr=row.filter(n=>n!==0);
+    while(arr.length<4) arr.push(0);
+    return arr;
+  }
+  function combine(row){
+    for(let i=0;i<3;i++){
+      if(row[i]!==0 && row[i]===row[i+1]){
+        row[i]*=2; score2048+=row[i]; row[i+1]=0; moved=true;
+      }
+    }
+    return row;
+  }
+  const rotate = (mat) => mat[0].map((val,col)=>mat.map(r=>r[col]).reverse());
+  const rotations = { 'ArrowLeft':0, 'ArrowUp':1, 'ArrowRight':2, 'ArrowDown':3 }[direction];
+
+  for(let k=0;k<rotations;k++) grid=rotate(grid);
+
+  for(let y=0;y<4;y++){
+    let row = grid[y];
+    let before = [...row];
+    row = slide(row);
+    row = combine(row);
+    row = slide(row);
+    grid[y] = row;
+    if(!moved) moved = !row.every((v,i)=>v===before[i]);
+  }
+
+  for(let k=0;k<(4-rotations)%4;k++) grid=rotate(grid);
+
+  if(moved){ addTile(); drawGrid(); }
+}
+
 document.addEventListener('keydown', e=>{
   if(document.getElementById('game2048').style.display!=='block') return;
-  let moved=false;
-  const rotate=function(mat){ return mat[0].map((val,col)=>mat.map(row=>row[col]).reverse()); };
-  const combine=function(row){ for(let i=row.length-1;i>0;i--){ if(row[i]!==0 && row[i]===row[i-1]){ row[i]*=2; score2048+=row[i]; row[i-1]=0; moved=true; } } return row; };
-  const slide=function(row){ let r=row.filter(n=>n!==0); while(r.length<4) r.unshift(0); return r; };
-  const move=function(dir){ for(let k=0;k<dir;k++){ grid=rotate(grid); } for(let y=0;y<4;y++){ let row=grid[y]; row=combine(row); row=slide(row); grid[y]=row; } for(let k=0;k<(4-dir)%4;k++){ grid=rotate(grid); } drawGrid(); };
-  if(e.key==='ArrowLeft'){ move(0); moved=true; }
-  if(e.key==='ArrowUp'){ move(1); moved=true; }
-  if(e.key==='ArrowRight'){ move(2); moved=true; }
-  if(e.key==='ArrowDown'){ move(3); moved=true; }
-  if(moved) addTile();
+  if(['ArrowLeft','ArrowUp','ArrowRight','ArrowDown'].includes(e.key)){
+    moveGrid(e.key);
+  }
 });
 
 // ===== RUNNER =====
