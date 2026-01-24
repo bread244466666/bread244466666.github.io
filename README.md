@@ -5,28 +5,48 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Mini Game Arcade – Password Protected</title>
 <style>
-  body { 
+  body {
     margin:0; font-family:Arial, Helvetica, sans-serif; background:#020617; color:#e5e7eb; min-height:100vh;
   }
   header { padding:30px; text-align:center; background:linear-gradient(135deg,#2563eb,#4f46e5); }
-  #password-screen {
+  
+  #password-screen, #name-screen {
     position:fixed; inset:0; background:#020617; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:20px; z-index:100;
   }
-  #password-screen.hidden { display:none; }
-  input[type="password"] { padding:14px 18px; font-size:1.2rem; width:320px; max-width:90%; border-radius:8px; border:2px solid #4f46e5; background:#1e293b; color:white; }
-  button#unlock { padding:14px 40px; font-size:1.2rem; background:#2563eb; color:white; border:none; border-radius:8px; cursor:pointer; }
-  button#unlock:hover { background:#1d4ed8; }
-  #error { color:#ef4444; font-size:1.1rem; min-height:1.5em; }
-  nav { display:flex; justify-content:center; gap:15px; padding:15px; background:#020617; border-bottom:1px solid #1e293b; }
+  #password-screen.hidden, #name-screen.hidden { display:none; }
+  
+  input[type="password"], input[type="text"] {
+    padding:14px 18px; font-size:1.2rem; width:320px; max-width:90%; border-radius:8px;
+    border:2px solid #4f46e5; background:#1e293b; color:white;
+  }
+  button.unlock-btn {
+    padding:14px 40px; font-size:1.2rem; background:#2563eb; color:white; border:none;
+    border-radius:8px; cursor:pointer;
+  }
+  button.unlock-btn:hover { background:#1d4ed8; }
+  .error-msg { color:#ef4444; font-size:1.1rem; min-height:1.5em; }
+  
+  nav { display:flex; justify-content:center; gap:15px; padding:15px; background:#020617; border-bottom:1px solid #1e293b; flex-wrap:wrap; }
   nav button { padding:10px 18px; border:none; border-radius:8px; background:#1e40af; color:white; cursor:pointer; font-size:0.95rem; }
   nav button:hover { background:#1d4ed8; }
-  main { max-width:900px; margin:30px auto; padding:0 20px; }
-  .game { display:none; background:#020617; border-radius:14px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
+  
+  main { max-width:960px; margin:30px auto; padding:0 20px; }
+  .game { display:none; background:#020617; border-radius:14px; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
   canvas { display:block; margin:20px auto; background:black; border-radius:10px; }
   button.action { padding:10px 20px; border:none; border-radius:8px; background:#2563eb; color:white; cursor:pointer; margin-top:10px; }
-  #score2048, #dodgeScore, #scoreAlien { font-size:1.2rem; margin-top:10px; text-align:center; }
+  
   #game2048 { display:block; margin:20px auto; width:400px; height:400px; position:relative; background:#111827; border-radius:10px; }
   .tile { width:90px; height:90px; position:absolute; display:flex; align-items:center; justify-content:center; font-size:2rem; font-weight:bold; border-radius:10px; color:white; transition:all 0.15s ease; }
+
+  /* Leaderboard styles */
+  .leaderboard h2 { color:#60a5fa; margin-top:30px; }
+  table { width:100%; border-collapse:collapse; margin:16px 0; background:#1e293b; border-radius:10px; overflow:hidden; }
+  th, td { padding:12px 16px; text-align:left; border-bottom:1px solid #334155; }
+  th { background:#0f172a; color:#94a3b8; text-transform:uppercase; font-size:0.9rem; letter-spacing:0.5px; }
+  .rank { width:70px; font-weight:bold; color:#fbbf24; font-size:1.1rem; }
+  .score { text-align:right; font-weight:bold; color:#60a5fa; font-size:1.1rem; }
+  tr:hover { background:#253549; }
+  .empty-msg { text-align:center; padding:30px; color:#64748b; font-style:italic; }
 </style>
 </head>
 <body>
@@ -35,14 +55,23 @@
 <div id="password-screen">
   <h2>Enter Password to Unlock Games</h2>
   <input type="password" id="password-input" placeholder="Password..." autofocus>
-  <button id="unlock">Unlock</button>
-  <div id="error"></div>
+  <button class="unlock-btn" id="unlock-password">Unlock</button>
+  <div id="password-error" class="error-msg"></div>
+</div>
+
+<!-- Name entry screen (appears after correct password) -->
+<div id="name-screen" class="hidden">
+  <h2>Enter Your Name to Play</h2>
+  <input type="text" id="name-input" placeholder="Your name..." autofocus>
+  <button class="unlock-btn" id="unlock-name">Start Playing</button>
+  <div id="name-error" class="error-msg"></div>
 </div>
 
 <!-- Main content -->
 <div id="main-content" style="display:none;">
   <header>
     <h1>🎮 Mini Game Arcade</h1>
+    <p id="welcome-message">Welcome, <span id="player-name">Guest</span>!</p>
     <p>Use <strong>W A S D</strong> • Space = shoot (Alien only)</p>
   </header>
   <nav>
@@ -51,11 +80,13 @@
     <button onclick="showGame('snake')">Snake</button>
     <button onclick="showGame('game2048')">2048</button>
     <button onclick="showGame('alien')">Alien Shooter</button>
+    <button onclick="showGame('leaderboard')">Leaderboard</button>
   </nav>
   <main>
     <section id="home" class="game" style="display:block">
-      <h2>Welcome</h2>
+      <h2>Welcome, <span id="player-name-home">Guest</span>!</h2>
       <p>Click "Start / Restart" in each game, then use WASD.<br>Click inside the game area if keys don't respond at first.</p>
+      <p>Your scores are saved under your name — check the Leaderboard!</p>
     </section>
 
     <section id="dodge" class="game">
@@ -84,33 +115,132 @@
       <button class="action" onclick="startAlien()">Start / Restart</button>
       <p id="scoreAlien">Score: 0</p>
     </section>
+
+    <section id="leaderboard" class="game leaderboard">
+      <h2>Leaderboard – Top 10</h2>
+      <p>Scores saved locally in your browser</p>
+
+      <h3>Dodge the Blocks</h3>
+      <table id="lb-dodge"><thead><tr><th class="rank">Rank</th><th>Player</th><th class="score">Score</th></tr></thead><tbody></tbody></table>
+
+      <h3>Snake</h3>
+      <table id="lb-snake"><thead><tr><th class="rank">Rank</th><th>Player</th><th class="score">Length</th></tr></thead><tbody></tbody></table>
+
+      <h3>2048</h3>
+      <table id="lb-2048"><thead><tr><th class="rank">Rank</th><th>Player</th><th class="score">Score</th></tr></thead><tbody></tbody></table>
+
+      <h3>Alien Shooter</h3>
+      <table id="lb-alien"><thead><tr><th class="rank">Rank</th><th>Player</th><th class="score">Score</th></tr></thead><tbody></tbody></table>
+    </section>
   </main>
 </div>
 
 <script>
-// PASSWORD
+// ────────────────────────────────────────────────
+// PASSWORD + NAME ENTRY
+// ────────────────────────────────────────────────
 const CORRECT_PASSWORD = 'bread';
+let currentPlayerName = 'Guest';
 
-document.getElementById('unlock').onclick = () => {
+document.getElementById('unlock-password').onclick = () => {
   const input = document.getElementById('password-input').value.trim();
-  const error = document.getElementById('error');
+  const error = document.getElementById('password-error');
   if (input === CORRECT_PASSWORD) {
     document.getElementById('password-screen').classList.add('hidden');
-    document.getElementById('main-content').style.display = 'block';
-    document.body.focus();
-    init2048();
+    document.getElementById('name-screen').classList.remove('hidden');
+    document.getElementById('name-input').focus();
   } else {
     error.textContent = 'Wrong password. Try again.';
     document.getElementById('password-input').value = '';
-    document.getElementById('password-input').focus();
   }
 };
 
 document.getElementById('password-input').onkeypress = e => {
-  if (e.key === 'Enter') document.getElementById('unlock').click();
+  if (e.key === 'Enter') document.getElementById('unlock-password').click();
 };
 
-// GAME LOGIC
+document.getElementById('unlock-name').onclick = () => {
+  const name = document.getElementById('name-input').value.trim();
+  const error = document.getElementById('name-error');
+  if (name.length > 0) {
+    currentPlayerName = name;
+    document.getElementById('player-name').textContent = name;
+    document.getElementById('player-name-home').textContent = name;
+    document.getElementById('name-screen').classList.add('hidden');
+    document.getElementById('main-content').style.display = 'block';
+    document.body.focus();
+    init2048();
+    renderAll(); // show initial leaderboard
+  } else {
+    error.textContent = 'Please enter your name';
+  }
+};
+
+document.getElementById('name-input').onkeypress = e => {
+  if (e.key === 'Enter') document.getElementById('unlock-name').click();
+};
+
+// ────────────────────────────────────────────────
+// LEADERBOARD
+// ────────────────────────────────────────────────
+const GLOBAL_SCORES_KEY = 'arcade_global_leaderboard';
+
+function getLeaderboard() {
+  return JSON.parse(localStorage.getItem(GLOBAL_SCORES_KEY) || '{}');
+}
+
+function saveLeaderboard(data) {
+  localStorage.setItem(GLOBAL_SCORES_KEY, JSON.stringify(data));
+}
+
+function updateLeaderboard(game, score) {
+  if (!currentPlayerName || currentPlayerName === 'Guest') return;
+  
+  let board = getLeaderboard();
+  if (!board[game]) board[game] = [];
+
+  let entry = board[game].find(e => e.user === currentPlayerName);
+  if (entry) {
+    if (score > entry.score) entry.score = score;
+  } else {
+    board[game].push({ user: currentPlayerName, score });
+  }
+
+  board[game].sort((a, b) => b.score - a.score);
+  board[game] = board[game].slice(0, 50);
+  saveLeaderboard(board);
+  renderAll();
+}
+
+function renderLeaderboard(game) {
+  const tbody = document.querySelector(`#lb-${game} tbody`);
+  tbody.innerHTML = '';
+  const board = getLeaderboard();
+  const entries = (board[game] || []).slice(0, 10);
+
+  if (entries.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="empty-msg">No scores yet — be the first!</td></tr>';
+    return;
+  }
+
+  entries.forEach((e, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="rank">${i+1}</td>
+      <td>${e.user}</td>
+      <td class="score">${e.score.toLocaleString()}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderAll() {
+  ['dodge', 'snake', '2048', 'alien'].forEach(renderLeaderboard);
+}
+
+// ────────────────────────────────────────────────
+// GAME SWITCHER
+// ────────────────────────────────────────────────
 let dodgeRafId = null;
 let snakeTimer = null;
 let alienTimer = null;
@@ -118,6 +248,8 @@ let alienTimer = null;
 function showGame(id) {
   document.querySelectorAll('.game').forEach(g => g.style.display = 'none');
   document.getElementById(id).style.display = 'block';
+
+  if (id === 'leaderboard') renderAll();
 
   if (id !== 'dodge' && dodgeRafId) cancelAnimationFrame(dodgeRafId);
   if (id !== 'snake' && snakeTimer) clearInterval(snakeTimer);
@@ -129,11 +261,13 @@ function showGame(id) {
   });
 }
 
+// ────────────────────────────────────────────────
+// GAME LOGIC (with leaderboard updates on game over)
+// ────────────────────────────────────────────────
 // DODGE
 const dCanvas = document.getElementById('dodgeGame');
 const dctx = dCanvas.getContext('2d');
 let player, blocks, dScore, dOver, speedMul, spawn;
-
 function startDodge() {
   player = {x:180, y:420, w:40, h:20};
   blocks = [];
@@ -142,7 +276,6 @@ function startDodge() {
   if (dodgeRafId) cancelAnimationFrame(dodgeRafId);
   dodgeRafId = requestAnimationFrame(dLoop);
 }
-
 function dLoop() {
   if (dOver) return;
   dctx.clearRect(0,0,400,450);
@@ -150,12 +283,13 @@ function dLoop() {
   dctx.fillRect(player.x, player.y, player.w, player.h);
   if (Math.random() < spawn) blocks.push({x:Math.random()*360, y:0, s:4*speedMul});
   dctx.fillStyle = 'red';
-  blocks.forEach(b => {
+  blocks.forEach((b, idx) => {
     b.y += b.s;
     dctx.fillRect(b.x, b.y, 40, 40);
     if (b.x < player.x + player.w && b.x + 40 > player.x && b.y < player.y + player.h && b.y + 40 > player.y) {
       dOver = true;
       alert('Game Over! Score: ' + dScore);
+      updateLeaderboard('dodge', dScore);
     }
   });
   blocks = blocks.filter(b => b.y < 450);
@@ -169,7 +303,6 @@ function dLoop() {
 const sCanvas = document.getElementById('snakeGame');
 const sctx = sCanvas.getContext('2d');
 let snake = [], food, dir = {x:1,y:0};
-
 function startSnake() {
   if (snakeTimer) clearInterval(snakeTimer);
   snake = [{x:10,y:10}];
@@ -177,13 +310,13 @@ function startSnake() {
   food = {x:Math.floor(Math.random()*20), y:Math.floor(Math.random()*20)};
   snakeTimer = setInterval(sLoop, 130);
 }
-
 function sLoop() {
   sctx.clearRect(0,0,400,400);
   const head = {x:snake[0].x + dir.x, y:snake[0].y + dir.y};
   if (head.x<0 || head.x>=20 || head.y<0 || head.y>=20 ||
       snake.some((p,i)=>i>0 && p.x===head.x && p.y===head.y)) {
-    alert('Game Over!');
+    alert('Game Over! Length: ' + snake.length);
+    updateLeaderboard('snake', snake.length);
     clearInterval(snakeTimer); snakeTimer = null;
     return;
   }
@@ -197,21 +330,19 @@ function sLoop() {
   snake.forEach(p => sctx.fillRect(p.x*20, p.y*20, 20, 20));
 }
 
-// 2048 ─ FIXED: new tile spawns after EVERY valid move (slide or merge)
+// 2048 (your original version with leaderboard update example)
 let grid = [], score2048 = 0;
 const tileColors = {
   0:'#334155',2:'#eee4da',4:'#ede0c8',8:'#f2b179',16:'#f59563',
   32:'#f67c5f',64:'#f65e3b',128:'#edcf72',256:'#edcc61',512:'#edc850',
   1024:'#edc53f',2048:'#edc22e'
 };
-
 function init2048() {
   grid = Array(4).fill().map(()=>Array(4).fill(0));
   score2048 = 0;
   addTile(); addTile();
   drawGrid();
 }
-
 function addTile() {
   const empty = [];
   for (let y=0;y<4;y++) for (let x=0;x<4;x++) if (grid[y][x]===0) empty.push([y,x]);
@@ -219,7 +350,6 @@ function addTile() {
   const [y,x] = empty[Math.floor(Math.random()*empty.length)];
   grid[y][x] = Math.random()<0.9 ? 2 : 4;
 }
-
 function drawGrid() {
   const container = document.getElementById('game2048');
   container.innerHTML = '';
@@ -232,54 +362,35 @@ function drawGrid() {
       tile.textContent = v;
       tile.style.backgroundColor = tileColors[v] || '#3c3a32';
       tile.style.left = (x*100 + 5) + 'px';
-      tile.style.top  = (y*100 + 5) + 'px';
+      tile.style.top = (y*100 + 5) + 'px';
       container.appendChild(tile);
     }
   }
   document.getElementById('score2048').innerText = 'Score: ' + score2048;
 }
-
 function moveGrid(dir) {
   const rotMap = {w:3, a:0, s:1, d:2};
   let rotations = rotMap[dir];
   const rotate = m => m[0].map((_,i) => m.map(r => r[i]).reverse());
-
-  // Rotate grid to make direction always "left"
   for (let i = 0; i < rotations; i++) grid = rotate(grid);
-
   let moved = false;
-
   for (let y = 0; y < 4; y++) {
-    let before = [...grid[y]];  // snapshot to detect any change
-
-    // Slide left (remove zeros)
+    let before = [...grid[y]];
     let row = grid[y].filter(n => n !== 0);
-
-    // Merge
     for (let i = 0; i < row.length - 1; i++) {
       if (row[i] === row[i+1] && row[i] !== 0) {
         row[i] *= 2;
         score2048 += row[i];
         row[i+1] = 0;
-        i++;  // skip next (now zero)
+        i++;
       }
     }
-
-    // Remove zeros again after merge
     row = row.filter(n => n !== 0);
-
-    // Pad with zeros on right
     while (row.length < 4) row.push(0);
-
     grid[y] = row;
-
-    // If row changed at all → movement happened
     if (!before.every((v,i) => v === row[i])) moved = true;
   }
-
-  // Rotate back
   for (let i = 0; i < (4 - rotations) % 4; i++) grid = rotate(grid);
-
   if (moved) {
     addTile();
     drawGrid();
@@ -291,7 +402,6 @@ const aCanvas = document.getElementById('alienGame');
 const actx = aCanvas.getContext('2d');
 let aPlayer = {x:180,y:420,w:30,h:30};
 let aliens = [], bullets = [], aScore = 0, alienOver = false, alienSpeed = 1;
-
 function startAlien() {
   aPlayer = {x:180,y:420,w:30,h:30};
   aliens = []; bullets = []; aScore = 0; alienOver = false; alienSpeed = 1;
@@ -300,14 +410,12 @@ function startAlien() {
   alienTimer = setInterval(alienLoop, 20);
   setTimeout(spawnAlien, 800);
 }
-
 function spawnAlien() {
   if (alienOver) return;
   if (aliens.length >= 6) return setTimeout(spawnAlien, 1200);
   aliens.push({x:Math.random()*360+20, y:-20, r:18});
   setTimeout(spawnAlien, 1400 - aScore*2);
 }
-
 function alienLoop() {
   if (alienOver) return;
   actx.clearRect(0,0,400,450);
@@ -336,16 +444,19 @@ function alienLoop() {
     if (Math.hypot(aPlayer.x - al.x, aPlayer.y - al.y) < al.r + 20 || al.y > 470) {
       alienOver = true;
       alert('Game Over! Score: ' + aScore);
+      updateLeaderboard('alien', aScore);
       clearInterval(alienTimer); alienTimer = null;
     }
   });
   alienSpeed += 0.0004;
 }
 
+// ────────────────────────────────────────────────
 // INPUT
+// ────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
   const key = e.key.toLowerCase();
-  const visible = document.querySelector('.game:not([style*="none"])');
+  const visible = document.querySelector('.game:not([style*="display: none"])');
   if (!visible) return;
   const id = visible.id;
 
