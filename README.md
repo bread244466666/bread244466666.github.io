@@ -1,3 +1,4 @@
+
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
@@ -6,12 +7,12 @@
 <style>
   body { margin:0; font-family:Arial, Helvetica, sans-serif; background:#020617; color:#e5e7eb; min-height:100vh; }
   header { padding:30px; text-align:center; background:linear-gradient(135deg,#2563eb,#4f46e5); }
-  
+ 
   #password-screen, #name-screen {
     position:fixed; inset:0; background:#020617; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:20px; z-index:100;
   }
   #password-screen.hidden, #name-screen.hidden { display:none; }
-  
+ 
   input[type="password"], input[type="text"] {
     padding:14px 18px; font-size:1.2rem; width:320px; max-width:90%; border-radius:8px;
     border:2px solid #4f46e5; background:#1e293b; color:white;
@@ -19,16 +20,16 @@
   button.unlock-btn { padding:14px 40px; font-size:1.2rem; background:#2563eb; color:white; border:none; border-radius:8px; cursor:pointer; }
   button.unlock-btn:hover { background:#1d4ed8; }
   .error-msg { color:#ef4444; font-size:1.1rem; min-height:1.5em; }
-  
+ 
   nav { display:flex; justify-content:center; gap:15px; padding:15px; background:#020617; border-bottom:1px solid #1e293b; flex-wrap:wrap; }
   nav button { padding:10px 18px; border:none; border-radius:8px; background:#1e40af; color:white; cursor:pointer; font-size:0.95rem; }
   nav button:hover { background:#1d4ed8; }
-  
+ 
   main { max-width:960px; margin:30px auto; padding:0 20px; }
   .game { display:none; background:#020617; border-radius:14px; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
   canvas { display:block; margin:20px auto; background:black; border-radius:10px; }
   button.action { padding:10px 20px; border:none; border-radius:8px; background:#2563eb; color:white; cursor:pointer; margin-top:10px; }
-  
+ 
   #game2048 { display:block; margin:20px auto; width:400px; height:400px; position:relative; background:#111827; border-radius:10px; }
   .tile { width:90px; height:90px; position:absolute; display:flex; align-items:center; justify-content:center; font-size:2rem; font-weight:bold; border-radius:10px; color:white; transition:all 0.15s ease; }
 
@@ -40,6 +41,66 @@
   .score { text-align:right; font-weight:bold; color:#60a5fa; font-size:1.1rem; }
   tr:hover { background:#253549; }
   .empty-msg, .loading-msg { text-align:center; padding:30px; color:#64748b; font-style:italic; }
+
+  /* Popcorn Multiplayer Styles (adjusted for dark theme) */
+  #popcorn-game {
+    width:360px;
+    height:560px;
+    background:#1e293b;
+    border-radius:18px;
+    box-shadow:0 10px 30px rgba(0,0,0,.6);
+    position:relative;
+    overflow:hidden;
+    margin:0 auto;
+  }
+  #popcorn-header {
+    padding:12px;
+    text-align:center;
+    background:#facc15;
+    color:#000;
+    font-weight:bold;
+  }
+  #popcorn-info {
+    display:flex;
+    justify-content:space-between;
+    padding:8px 12px;
+    font-size:14px;
+    background:#111827;
+  }
+  #popcorn-field {
+    position:relative;
+    width:100%;
+    height:380px;
+    background:#334155;
+  }
+  .kernel {
+    position:absolute;
+    width:30px;
+    height:30px;
+    background:#fde68a;
+    border-radius:50%;
+    cursor:pointer;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    font-size:12px;
+    color:#000;
+  }
+  #popcorn-mp {
+    padding:10px;
+    text-align:center;
+    background:#111827;
+  }
+  #popcorn-gameover {
+    position:absolute;
+    inset:0;
+    background:rgba(0,0,0,.8);
+    color:white;
+    display:none;
+    justify-content:center;
+    align-items:center;
+    flex-direction:column;
+  }
 </style>
 </head>
 <body>
@@ -73,6 +134,7 @@
     <button onclick="showGame('snake')">Snake</button>
     <button onclick="showGame('game2048')">2048</button>
     <button onclick="showGame('alien')">Alien Shooter</button>
+    <button onclick="showGame('popcorn')">Popcorn Multiplayer</button>
     <button onclick="showGame('leaderboard')">Leaderboard</button>
   </nav>
   <main>
@@ -108,19 +170,38 @@
       <p id="scoreAlien">Score: 0</p>
     </section>
 
+    <section id="popcorn" class="game">
+      <h2>Popcorn Multiplayer</h2>
+      <div id="popcorn-game">
+        <header id="popcorn-header">🍿 Popcorn Multiplayer</header>
+        <div id="popcorn-info">
+          <div>You: <span id="myScore">0</span></div>
+          <div>Friend: <span id="opScore">0</span></div>
+          <div>Miss: <span id="miss">0</span>/5</div>
+        </div>
+        <div id="popcorn-field"></div>
+        <div id="popcorn-mp">
+          <button onclick="host()">Host</button>
+          <button onclick="join()">Join</button>
+          <div id="status">Offline</div>
+        </div>
+        <div id="popcorn-gameover">
+          <h2>Game Over</h2>
+          <p>You: <span id="fMy"></span> | Friend: <span id="fOp"></span></p>
+          <button onclick="resetGame()">Restart</button>
+        </div>
+      </div>
+    </section>
+
     <section id="leaderboard" class="game leaderboard">
       <h2>Global Leaderboard – Top 10</h2>
       <p>Shared with everyone playing this game</p>
-
       <h3>Dodge the Blocks</h3>
       <table id="lb-dodge"><thead><tr><th class="rank">Rank</th><th>Player</th><th class="score">Score</th></tr></thead><tbody></tbody></table>
-
       <h3>Snake</h3>
       <table id="lb-snake"><thead><tr><th class="rank">Rank</th><th>Player</th><th class="score">Length</th></tr></thead><tbody></tbody></table>
-
       <h3>2048</h3>
       <table id="lb-2048"><thead><tr><th class="rank">Rank</th><th>Player</th><th class="score">Score</th></tr></thead><tbody></tbody></table>
-
       <h3>Alien Shooter</h3>
       <table id="lb-alien"><thead><tr><th class="rank">Rank</th><th>Player</th><th class="score">Score</th></tr></thead><tbody></tbody></table>
     </section>
@@ -132,7 +213,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 
 <script>
-// Your real Firebase config
+// Your Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyANLp5iTUBM9isYt3nRaxYt9fZ-qc-Lsts",
   authDomain: "minigamearcade-373e5.firebaseapp.com",
@@ -190,11 +271,9 @@ const LEADERBOARD_PATHS = {
 
 function updateLeaderboard(game, score) {
   if (!currentPlayerName || score <= 0) return;
-
   const path = LEADERBOARD_PATHS[game];
   const safeName = currentPlayerName.replace(/[.#$[\]]/g, '_');
   const ref = db.ref(path + '/' + safeName);
-
   ref.once('value', snap => {
     const data = snap.val();
     if (!data || score > data.score) {
@@ -210,7 +289,6 @@ function updateLeaderboard(game, score) {
 function renderLeaderboard(game) {
   const tbody = document.querySelector(`#lb-${game} tbody`);
   tbody.innerHTML = '<tr><td colspan="3" class="loading-msg">Loading global scores...</td></tr>';
-
   const path = LEADERBOARD_PATHS[game];
   db.ref(path).orderByChild('score').limitToLast(10).once('value', snap => {
     tbody.innerHTML = '';
@@ -220,12 +298,10 @@ function renderLeaderboard(game) {
       entries.push({ name: d.name || child.key, score: d.score });
     });
     entries.sort((a,b) => b.score - a.score);
-
     if (entries.length === 0) {
       tbody.innerHTML = '<tr><td colspan="3" class="empty-msg">No scores yet — be the first!</td></tr>';
       return;
     }
-
     entries.forEach((e, i) => {
       const tr = document.createElement('tr');
       tr.innerHTML = `<td class="rank">${i+1}</td><td>${e.name}</td><td class="score">${e.score.toLocaleString()}</td>`;
@@ -238,7 +314,6 @@ function renderAll() {
   ['dodge','snake','2048','alien'].forEach(renderLeaderboard);
 }
 
-// Live updates
 Object.values(LEADERBOARD_PATHS).forEach(path => {
   db.ref(path).on('value', () => {
     if (document.getElementById('leaderboard').style.display !== 'none') {
@@ -257,13 +332,10 @@ let alienTimer = null;
 function showGame(id) {
   document.querySelectorAll('.game').forEach(g => g.style.display = 'none');
   document.getElementById(id).style.display = 'block';
-
   if (id === 'leaderboard') renderAll();
-
   if (id !== 'dodge' && dodgeRafId) cancelAnimationFrame(dodgeRafId);
   if (id !== 'snake' && snakeTimer) clearInterval(snakeTimer);
   if (id !== 'alien' && alienTimer) clearInterval(alienTimer);
-
   ['dodgeGame','snakeGame','alienGame'].forEach(cid => {
     const c = document.getElementById(cid);
     if (c) c.getContext('2d')?.clearRect(0,0,c.width,c.height);
@@ -341,7 +413,7 @@ function sLoop() {
 }
 
 // ────────────────────────────────────────────────
-// 2048 – WITH GAME OVER DETECTION & LEADERBOARD SAVE
+// 2048
 // ────────────────────────────────────────────────
 let grid = [], score2048 = 0;
 const tileColors = {
@@ -403,44 +475,11 @@ function moveGrid(dir) {
     if (!before.every((v,i) => v === row[i])) moved = true;
   }
   for (let i = 0; i < (4 - rotations) % 4; i++) grid = rotate(grid);
-
   if (moved) {
     addTile();
     drawGrid();
-
-    // Check for win
-    if (grid.flat().includes(2048)) {
-      alert('You win! 2048 reached! Score: ' + score2048);
-      updateLeaderboard('2048', score2048);
-    }
-
-    // Check for game over
-    let gameOver = true;
-    for (let y = 0; y < 4 && gameOver; y++) {
-      for (let x = 0; x < 4; x++) {
-        const val = grid[y][x];
-        if (val === 0) {
-          gameOver = false;
-          break;
-        }
-        if (x < 3 && val === grid[y][x+1]) {
-          gameOver = false;
-          break;
-        }
-        if (y < 3 && val === grid[y+1][x]) {
-          gameOver = false;
-          break;
-        }
-      }
-    }
-
-    if (gameOver && score2048 > 0) {
-      alert('Game Over! No moves left. Final Score: ' + score2048);
-      updateLeaderboard('2048', score2048);
-    }
   }
 }
-
 // ────────────────────────────────────────────────
 // ALIEN SHOOTER
 // ────────────────────────────────────────────────
@@ -496,7 +535,6 @@ function alienLoop() {
   });
   alienSpeed += 0.0004;
 }
-
 // ────────────────────────────────────────────────
 // INPUT
 // ────────────────────────────────────────────────
@@ -505,7 +543,6 @@ document.addEventListener('keydown', e => {
   const visible = document.querySelector('.game:not([style*="display: none"])');
   if (!visible) return;
   const id = visible.id;
-
   if (id === 'dodge') {
     if (key==='a') player.x -= 22;
     if (key==='d') player.x += 22;
@@ -524,8 +561,8 @@ document.addEventListener('keydown', e => {
     }
   }
   else if (id === 'alien') {
-    if (key==='a') aPlayer.x -= 16;
-    if (key==='d') aPlayer.x += 16;
+    if (key==='a') aPlayer.x -= 8;
+    if (key==='d') aPlayer.x += 8;
     aPlayer.x = Math.max(0, Math.min(370, aPlayer.x));
     if (e.key === ' ') {
       bullets.push({x:aPlayer.x, y:aPlayer.y - aPlayer.h/2});
@@ -533,6 +570,129 @@ document.addEventListener('keydown', e => {
     }
   }
 });
+// ────────────────────────────────────────────────
+// POPCORN MULTIPLAYER LOGIC
+// ────────────────────────────────────────────────
+const popcornField = document.getElementById("popcorn-field");
+const myScoreEl = document.getElementById("myScore");
+const opScoreEl = document.getElementById("opScore");
+const missEl = document.getElementById("miss");
+const statusEl = document.getElementById("status");
+const popcornGameOverEl = document.getElementById("popcorn-gameover");
+const fMy = document.getElementById("fMy");
+const fOp = document.getElementById("fOp");
+let myScore = 0, opScore = 0, miss = 0;
+let speed = 2000;
+let spawnLoop;
+let pc, dc;
+let multiplayer = false;
+
+function host() {
+  multiplayer = true;
+  setup(true);
+}
+
+function join() {
+  multiplayer = true;
+  setup(false);
+}
+
+function setup(isHost) {
+  pc = new RTCPeerConnection();
+  if (isHost) {
+    dc = pc.createDataChannel("pop");
+    bind();
+  } else {
+    pc.ondatachannel = e => { dc = e.channel; bind(); };
+  }
+  pc.onicecandidate = e => {
+    if (e.candidate) console.log("ICE candidate:", JSON.stringify(e.candidate));
+  };
+  if (isHost) {
+    pc.createOffer().then(o => {
+      pc.setLocalDescription(o);
+      alert("Send this OFFER to your friend:\n" + JSON.stringify(o));
+    });
+  } else {
+    const offer = JSON.parse(prompt("Paste your friend's OFFER here"));
+    pc.setRemoteDescription(offer);
+    pc.createAnswer().then(a => {
+      pc.setLocalDescription(a);
+      alert("Send this ANSWER back:\n" + JSON.stringify(a));
+    });
+  }
+}
+
+function bind() {
+  dc.onopen = () => {
+    statusEl.textContent = "Connected!";
+    start();
+  };
+  dc.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (d.t === "spawn") spawnKernel(d.id, d.x, d.y);
+    if (d.t === "pop") {
+      const k = document.getElementById(d.id);
+      if (k) { k.remove(); opScore++; opScoreEl.textContent = opScore; }
+    }
+    if (d.t === "miss") {
+      miss = d.m;
+      missEl.textContent = miss;
+      if (miss >= 5) endGame();
+    }
+    if (d.t === "over") endGame();
+  };
+}
+
+function start() {
+  clearInterval(spawnLoop);
+  spawnLoop = setInterval(() => {
+    const id = "k" + Date.now();
+    const x = Math.random() * (popcornField.clientWidth - 30);
+    const y = Math.random() * (popcornField.clientHeight - 30);
+    spawnKernel(id, x, y);
+    if (dc && dc.readyState === 'open') {
+      dc.send(JSON.stringify({ t: "spawn", id, x, y }));
+    }
+  }, speed);
+}
+
+function spawnKernel(id, x, y) {
+  const k = document.createElement("div");
+  k.className = "kernel";
+  k.id = id;
+  k.style.left = x + "px";
+  k.style.top = y + "px";
+  popcornField.appendChild(k);
+  let timer = setTimeout(() => {
+    if (k.parentNode) {
+      k.remove();
+      miss++;
+      missEl.textContent = miss;
+      if (dc && dc.readyState === 'open') dc.send(JSON.stringify({ t: "miss", m: miss }));
+      if (miss >= 5 && dc && dc.readyState === 'open') dc.send(JSON.stringify({ t: "over" }));
+    }
+  }, 1500);
+  k.onclick = () => {
+    clearTimeout(timer);
+    if (!k.parentNode) return;
+    k.remove();
+    myScore++;
+    myScoreEl.textContent = myScore;
+    if (dc && dc.readyState === 'open') dc.send(JSON.stringify({ t: "pop", id }));
+  };
+}
+
+function endGame() {
+  clearInterval(spawnLoop);
+  fMy.textContent = myScore;
+  fOp.textContent = opScore;
+  popcornGameOverEl.style.display = "flex";
+}
+
+function resetGame() {
+  location.reload();
+}
 </script>
 </body>
 </html>
