@@ -584,8 +584,8 @@ document.addEventListener('keydown', e => {
     }
   }
   else if (id === 'alien') {
-    if (key==='a') aPlayer.x -= 20;
-    if (key==='d') aPlayer.x += 20;
+    if (key==='a') aPlayer.x -= 15;
+    if (key==='d') aPlayer.x += 15;
     aPlayer.x = Math.max(0, Math.min(370, aPlayer.x));
     if (e.key === ' ') {
       bullets.push({x:aPlayer.x, y:aPlayer.y - aPlayer.h/2});
