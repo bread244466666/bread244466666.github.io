@@ -99,7 +99,7 @@
     <button onclick="showGame('dodge')">Dodge</button>
     <button onclick="showGame('snake')">Snake</button>
     <button onclick="showGame('game2048')">2048</button>
-    <button onclick="showGame('alien')">Alien Shooter</button>
+    <button onclick="showGame('shooter')">Alien Shooter</button>
     <button onclick="showGame('leaderboard')">Leaderboard</button>
   </nav>
   <main>
@@ -448,57 +448,275 @@ function moveGrid(dir) {
 // ────────────────────────────────────────────────
 // ALIEN SHOOTER
 // ────────────────────────────────────────────────
-const aCanvas = document.getElementById('alienGame');
-const actx = aCanvas.getContext('2d');
-let aPlayer = {x:180,y:420,w:30,h:30};
-let aliens = [], bullets = [], aScore = 0, alienOver = false, alienSpeed = 1;
-function startAlien() {
-  aPlayer = {x:180,y:420,w:30,h:30};
-  aliens = []; bullets = []; aScore = 0; alienOver = false; alienSpeed = 1;
-  document.getElementById('scoreAlien').innerText = 'Score: 0';
-  if (alienTimer) clearInterval(alienTimer);
-  alienTimer = setInterval(alienLoop, 20);
-  setTimeout(spawnAlien, 800);
+const cosmicCanvas = document.getElementById('cosmic-canvas');
+const cosmicCtx = cosmicCanvas.getContext('2d');
+const cosmicContainer = document.getElementById('cosmic-gameContainer');
+
+// Set canvas size
+function cosmicResizeCanvas() {
+  cosmicCanvas.width = cosmicContainer.clientWidth;
+  cosmicCanvas.height = cosmicContainer.clientHeight;
 }
-function spawnAlien() {
-  if (alienOver) return;
-  if (aliens.length >= 6) return setTimeout(spawnAlien, 1200);
-  aliens.push({x:Math.random()*360+20, y:-20, r:18});
-  setTimeout(spawnAlien, 1400 - aScore*2);
+cosmicResizeCanvas();
+window.addEventListener('resize', cosmicResizeCanvas);
+
+// Create star field
+const cosmicStarsContainer = document.getElementById('cosmic-stars');
+for (let i = 0; i < 100; i++) {
+  const star = document.createElement('div');
+  star.className = 'cosmic-star';
+  star.style.left = Math.random() * 100 + '%';
+  star.style.top = Math.random() * 100 + '%';
+  star.style.width = star.style.height = (Math.random() * 2 + 1) + 'px';
+  star.style.animationDelay = Math.random() * 3 + 's';
+  cosmicStarsContainer.appendChild(star);
 }
-function alienLoop() {
-  if (alienOver) return;
-  actx.clearRect(0,0,400,450);
-  actx.fillStyle = 'cyan';
-  actx.beginPath();
-  actx.moveTo(aPlayer.x, aPlayer.y - aPlayer.h/2);
-  actx.lineTo(aPlayer.x - aPlayer.w/2, aPlayer.y + aPlayer.h/2);
-  actx.lineTo(aPlayer.x + aPlayer.w/2, aPlayer.y + aPlayer.h/2);
-  actx.closePath(); actx.fill();
-  actx.strokeStyle = 'yellow'; actx.lineWidth = 3;
-  bullets.forEach((b,i) => {
-    b.y -= 7;
-    actx.beginPath(); actx.moveTo(b.x,b.y); actx.lineTo(b.x,b.y-16); actx.stroke();
-    aliens.forEach((al,j) => {
-      if (Math.hypot(b.x-al.x, b.y-al.y) < al.r + 6) {
-        aliens.splice(j,1); bullets.splice(i,1); aScore += 10;
-        document.getElementById('scoreAlien').innerText = 'Score: ' + aScore;
+
+// Game state
+let cosmicGameActive = false;
+let cosmicScore = 0;
+let cosmicLives = 3;
+let cosmicKeys = {};
+let cosmicLastShot = 0;
+const cosmicShootCooldown = 300;
+
+// Game objects
+const cosmicPlayer = {
+  x: cosmicCanvas.width / 2,
+  y: cosmicCanvas.height - 100,
+  width: 40,
+  height: 40,
+  speed: 5,
+  color: '#00ffff'
+};
+let cosmicBullets = [];
+let cosmicEnemies = [];
+let cosmicExplosions = [];
+
+// Input handling
+window.addEventListener('keydown', (e) => {
+  cosmicKeys[e.key.toLowerCase()] = true;
+  if (e.key === ' ' && cosmicGameActive) {
+    e.preventDefault();
+    cosmicShoot();
+  }
+});
+window.addEventListener('keyup', (e) => {
+  cosmicKeys[e.key.toLowerCase()] = false;
+});
+
+// Start game
+document.getElementById('cosmic-startBtn').addEventListener('click', cosmicStartGame);
+document.getElementById('cosmic-restartBtn').addEventListener('click', cosmicStartGame);
+
+function cosmicStartGame() {
+  cosmicGameActive = true;
+  cosmicScore = 0;
+  cosmicLives = 3;
+  cosmicBullets = [];
+  cosmicEnemies = [];
+  cosmicExplosions = [];
+  cosmicPlayer.x = cosmicCanvas.width / 2;
+  
+  document.getElementById('cosmic-startScreen').classList.add('hidden');
+  document.getElementById('cosmic-gameOverScreen').classList.add('hidden');
+  cosmicUpdateUI();
+  
+  cosmicSpawnWave();
+  cosmicGameLoop();
+}
+
+function cosmicShoot() {
+  const now = Date.now();
+  if (now - cosmicLastShot < cosmicShootCooldown) return;
+  
+  cosmicLastShot = now;
+  cosmicBullets.push({
+    x: cosmicPlayer.x,
+    y: cosmicPlayer.y,
+    width: 4,
+    height: 15,
+    speed: 8,
+    color: '#ffff00'
+  });
+}
+
+function cosmicSpawnWave() {
+  const rows = 3;
+  const cols = 8;
+  const enemyWidth = 30;
+  const enemyHeight = 30;
+  const spacing = 60;
+  const startX = (cosmicCanvas.width - (cols * spacing)) / 2;
+  
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      cosmicEnemies.push({
+        x: startX + col * spacing,
+        y: 50 + row * spacing,
+        width: enemyWidth,
+        height: enemyHeight,
+        speed: 1,
+        direction: 1,
+        color: ['#ff00ff', '#ff0066', '#ff3399'][row]
+      });
+    }
+  }
+}
+
+function cosmicCreateExplosion(x, y) {
+  for (let i = 0; i < 15; i++) {
+    cosmicExplosions.push({
+      x: x,
+      y: y,
+      vx: (Math.random() - 0.5) * 6,
+      vy: (Math.random() - 0.5) * 6,
+      life: 1,
+      size: Math.random() * 4 + 2,
+      color: ['#ff00ff', '#00ffff', '#ffff00'][Math.floor(Math.random() * 3)]
+    });
+  }
+}
+
+function cosmicUpdateUI() {
+  document.getElementById('cosmic-score').textContent = cosmicScore;
+  document.getElementById('cosmic-lives').textContent = cosmicLives;
+}
+
+function cosmicGameOver() {
+  cosmicGameActive = false;
+  document.getElementById('cosmic-finalScore').textContent = `FINAL SCORE: ${cosmicScore}`;
+  document.getElementById('cosmic-gameOverScreen').classList.remove('hidden');
+}
+
+function cosmicGameLoop() {
+  if (!cosmicGameActive) return;
+  cosmicCtx.clearRect(0, 0, cosmicCanvas.width, cosmicCanvas.height);
+
+  // Move player
+  if ((cosmicKeys['arrowleft'] || cosmicKeys['a']) && cosmicPlayer.x > cosmicPlayer.width / 2) {
+    cosmicPlayer.x -= cosmicPlayer.speed;
+  }
+  if ((cosmicKeys['arrowright'] || cosmicKeys['d']) && cosmicPlayer.x < cosmicCanvas.width - cosmicPlayer.width / 2) {
+    cosmicPlayer.x += cosmicPlayer.speed;
+  }
+
+  // Draw player
+  cosmicCtx.save();
+  cosmicCtx.translate(cosmicPlayer.x, cosmicPlayer.y);
+  cosmicCtx.fillStyle = cosmicPlayer.color;
+  cosmicCtx.shadowBlur = 20;
+  cosmicCtx.shadowColor = cosmicPlayer.color;
+  cosmicCtx.beginPath();
+  cosmicCtx.moveTo(0, -cosmicPlayer.height / 2);
+  cosmicCtx.lineTo(-cosmicPlayer.width / 2, cosmicPlayer.height / 2);
+  cosmicCtx.lineTo(0, cosmicPlayer.height / 3);
+  cosmicCtx.lineTo(cosmicPlayer.width / 2, cosmicPlayer.height / 2);
+  cosmicCtx.closePath();
+  cosmicCtx.fill();
+  cosmicCtx.restore();
+
+  // Update and draw bullets
+  cosmicBullets = cosmicBullets.filter(bullet => {
+    bullet.y -= bullet.speed;
+    
+    cosmicCtx.fillStyle = bullet.color;
+    cosmicCtx.shadowBlur = 15;
+    cosmicCtx.shadowColor = bullet.color;
+    cosmicCtx.fillRect(bullet.x - bullet.width / 2, bullet.y, bullet.width, bullet.height);
+    
+    return bullet.y > 0;
+  });
+
+  // Update and draw enemies
+  let moveDown = false;
+  let allEnemiesGone = true;
+  
+  cosmicEnemies.forEach(enemy => {
+    allEnemiesGone = false;
+    enemy.x += enemy.speed * enemy.direction;
+    
+    if (enemy.x <= enemy.width / 2 || enemy.x >= cosmicCanvas.width - enemy.width / 2) {
+      moveDown = true;
+    }
+    
+    // Draw enemy
+    cosmicCtx.fillStyle = enemy.color;
+    cosmicCtx.shadowBlur = 20;
+    cosmicCtx.shadowColor = enemy.color;
+    cosmicCtx.fillRect(enemy.x - enemy.width / 2, enemy.y - enemy.height / 2, enemy.width, enemy.height);
+    
+    // Draw enemy details
+    cosmicCtx.fillStyle = '#ffffff';
+    cosmicCtx.fillRect(enemy.x - 8, enemy.y - 5, 4, 4);
+    cosmicCtx.fillRect(enemy.x + 4, enemy.y - 5, 4, 4);
+  });
+
+  if (moveDown) {
+    cosmicEnemies.forEach(enemy => {
+      enemy.direction *= -1;
+      enemy.y += 20;
+    });
+  }
+
+  if (allEnemiesGone && cosmicEnemies.length === 0) {
+    setTimeout(() => {
+      if (cosmicGameActive) cosmicSpawnWave();
+    }, 1000);
+  }
+
+  // Collision detection
+  cosmicBullets.forEach((bullet, bIndex) => {
+    cosmicEnemies.forEach((enemy, eIndex) => {
+      const dx = bullet.x - enemy.x;
+      const dy = bullet.y - enemy.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distance < enemy.width / 2 + bullet.width) {
+        cosmicCreateExplosion(enemy.x, enemy.y);
+        cosmicEnemies.splice(eIndex, 1);
+        cosmicBullets.splice(bIndex, 1);
+        cosmicScore += 100;
+        cosmicUpdateUI();
       }
     });
   });
-  bullets = bullets.filter(b=>b.y > -20);
-  actx.fillStyle = 'red';
-  aliens.forEach(al => {
-    al.y += alienSpeed;
-    actx.beginPath(); actx.arc(al.x, al.y, al.r, 0, Math.PI*2); actx.fill();
-    if (Math.hypot(aPlayer.x - al.x, aPlayer.y - al.y) < al.r + 20 || al.y > 470) {
-      alienOver = true;
-      alert('Game Over! Score: ' + aScore);
-      updateLeaderboard('alien', aScore);
-      clearInterval(alienTimer); alienTimer = null;
+
+  // Check if enemies reached player
+  cosmicEnemies.forEach(enemy => {
+    if (enemy.y + enemy.height / 2 >= cosmicPlayer.y - cosmicPlayer.height / 2) {
+      cosmicLives--;
+      cosmicUpdateUI();
+      cosmicCreateExplosion(cosmicPlayer.x, cosmicPlayer.y);
+      cosmicEnemies.length = 0;
+      
+      if (cosmicLives <= 0) {
+        cosmicGameOver();
+      } else {
+        setTimeout(() => {
+          if (cosmicGameActive) cosmicSpawnWave();
+        }, 1000);
+      }
     }
   });
-  alienSpeed += 0.0004;
+
+  // Update and draw explosions
+  cosmicExplosions = cosmicExplosions.filter(particle => {
+    particle.x += particle.vx;
+    particle.y += particle.vy;
+    particle.life -= 0.02;
+    
+    cosmicCtx.fillStyle = particle.color;
+    cosmicCtx.globalAlpha = particle.life;
+    cosmicCtx.shadowBlur = 10;
+    cosmicCtx.shadowColor = particle.color;
+    cosmicCtx.fillRect(particle.x, particle.y, particle.size, particle.size);
+    cosmicCtx.globalAlpha = 1;
+    
+    return particle.life > 0;
+  });
+
+  requestAnimationFrame(cosmicGameLoop);
 }
 // ────────────────────────────────────────────────
 // INPUT
