@@ -15,6 +15,18 @@
 </script>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5757280493155757"
      crossorigin="anonymous"></script>
+<!-- ? -->
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-5757280493155757"
+     data-ad-slot="4821100611"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+<script>
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5757280493155757"
+     crossorigin="anonymous"></script>
 <style>
   body { margin:0; font-family:Arial, Helvetica, sans-serif; background:#020617; color:#e5e7eb; min-height:100vh; }
   header { padding:30px; text-align:center; background:linear-gradient(135deg,#2563eb,#4f46e5); }
