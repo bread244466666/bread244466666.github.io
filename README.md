@@ -66,64 +66,7 @@
   .empty-msg, .loading-msg { text-align:center; padding:30px; color:#64748b; font-style:italic; }
 
   /* Popcorn Multiplayer Styles (adjusted for dark theme) */
-  #popcorn-game {
-    width:360px;
-    height:560px;
-    background:#1e293b;
-    border-radius:18px;
-    box-shadow:0 10px 30px rgba(0,0,0,.6);
-    position:relative;
-    overflow:hidden;
-    margin:0 auto;
-  }
-  #popcorn-header {
-    padding:12px;
-    text-align:center;
-    background:#facc15;
-    color:#000;
-    font-weight:bold;
-  }
-  #popcorn-info {
-    display:flex;
-    justify-content:space-between;
-    padding:8px 12px;
-    font-size:14px;
-    background:#111827;
-  }
-  #popcorn-field {
-    position:relative;
-    width:100%;
-    height:380px;
-    background:#334155;
-  }
-  .kernel {
-    position:absolute;
-    width:30px;
-    height:30px;
-    background:#fde68a;
-    border-radius:50%;
-    cursor:pointer;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    font-size:12px;
-    color:#000;
-  }
-  #popcorn-mp {
-    padding:10px;
-    text-align:center;
-    background:#111827;
-  }
-  #popcorn-gameover {
-    position:absolute;
-    inset:0;
-    background:rgba(0,0,0,.8);
-    color:white;
-    display:none;
-    justify-content:center;
-    align-items:center;
-    flex-direction:column;
-  }
+  
 </style>
 </head>
 <body>
@@ -157,7 +100,6 @@
     <button onclick="showGame('snake')">Snake</button>
     <button onclick="showGame('game2048')">2048</button>
     <button onclick="showGame('alien')">Alien Shooter</button>
-    <button onclick="showGame('popcorn')">Popcorn Multiplayer</button>
     <button onclick="showGame('leaderboard')">Leaderboard</button>
   </nav>
   <main>
