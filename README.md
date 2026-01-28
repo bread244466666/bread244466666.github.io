@@ -604,6 +604,7 @@ const statusEl = document.getElementById("status");
 const popcornGameOverEl = document.getElementById("popcorn-gameover");
 const fMy = document.getElementById("fMy");
 const fOp = document.getElementById("fOp");
+const copyNotice = document.getElementById("copy-notice");
 let myScore = 0, opScore = 0, miss = 0;
 let speed = 2000;
 let spawnLoop;
@@ -620,7 +621,17 @@ function join() {
   setup(false);
 }
 
-function setup(isHost) {
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    copyNotice.textContent = "Copied to clipboard!";
+    setTimeout(() => { copyNotice.textContent = ""; }, 3000);
+  }).catch(err => {
+    console.error('Clipboard copy failed:', err);
+    alert("Copy failed. Please manually copy:\n" + text);
+  });
+}
+
+async function setup(isHost) {
   pc = new RTCPeerConnection();
   if (isHost) {
     dc = pc.createDataChannel("pop");
@@ -631,18 +642,26 @@ function setup(isHost) {
   pc.onicecandidate = e => {
     if (e.candidate) console.log("ICE candidate:", JSON.stringify(e.candidate));
   };
-  if (isHost) {
-    pc.createOffer().then(o => {
-      pc.setLocalDescription(o);
-      alert("Send this OFFER to your friend:\n" + JSON.stringify(o));
-    });
-  } else {
-    const offer = JSON.parse(prompt("Paste your friend's OFFER here"));
-    pc.setRemoteDescription(offer);
-    pc.createAnswer().then(a => {
-      pc.setLocalDescription(a);
-      alert("Send this ANSWER back:\n" + JSON.stringify(a));
-    });
+
+  try {
+    if (isHost) {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      copyToClipboard(JSON.stringify(offer));
+      alert("OFFER copied to clipboard!\nSend it to your friend.");
+    } else {
+      const offerStr = prompt("Paste your friend's OFFER here:");
+      if (!offerStr) return;
+      const offer = JSON.parse(offerStr);
+      await pc.setRemoteDescription(offer);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      copyToClipboard(JSON.stringify(answer));
+      alert("ANSWER copied to clipboard!\nSend it back to the host.");
+    }
+  } catch (err) {
+    console.error("WebRTC setup error:", err);
+    alert("Connection setup failed: " + err.message);
   }
 }
 
