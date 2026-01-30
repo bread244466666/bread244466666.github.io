@@ -123,9 +123,9 @@
     <section id="game2048" class="game">
       <h2>2048</h2>
       <div id="game2048"></div>
+        <button class="action" onclick="update2048Score()">check score</button>
       <p id="score2048">Score: 0</p>
       <button class="action" onclick="init2048()">Restart</button>
-      <button class="action" onclick="update2048Score()">check score</button>
     </section>
 
     <section id="alien" class="game">
