@@ -125,7 +125,6 @@
       <div id="game2048-2"></div>
       <p id="score2048">Score: 0</p>
       <button class="action" onclick="init2048()">Restart</button>
-      <button type="button" onclick="update2048Score()"> check score</button>
     </section>
 
     <section id="alien" class="game">
@@ -510,6 +509,9 @@ document.addEventListener('keydown', e => {
       e.preventDefault();
     }
   }
+    if (key==='e') {
+      update2048score();
+    }
   else if (id === 'alien') {
     if (key==='a') aPlayer.x -= 15;
     if (key==='d') aPlayer.x += 15;
