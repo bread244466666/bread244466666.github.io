@@ -125,7 +125,8 @@
       <div id="game2048"></div>
       <p id="score2048">Score: 0</p>
       <button class="action" onclick="init2048()">Restart</button>
-      <button id="check-score-btn" class="action" onclick="update2048Score()"></button>
+      <canvas id="alienGame" width="400" height="450"></canvas>
+      <button class="action" onclick="update2048Score()"></button>
 
     </section>
 
@@ -445,13 +446,6 @@ function moveGrid(dir) {
     addTile();
     drawGrid();
   }
-}
-function showScoreButton() {
-  // Finds the button by its ID
-  var btn = document.getElementById("check-score-btn");
-  
-  // Makes the button visible
-  btn.style.display = "block"; 
 }
 
 function update2048Score() {
