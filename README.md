@@ -509,7 +509,7 @@ document.addEventListener('keydown', e => {
       e.preventDefault();
     }
     if (key==='e'){
-      update2048score();
+      update2048Score()
     }
   }
   else if (id === 'alien') {
