@@ -125,8 +125,7 @@
       <div id="game2048"></div>
       <p id="score2048">Score: 0</p>
       <button class="action" onclick="init2048()">Restart</button>
-      <canvas id="alienGame" width="400" height="450"></canvas>
-      <button class="action" onclick="update2048Score()"></button>
+      <button id="check-score-btn" class="action" onclick="update2048Score()"></button>
 
     </section>
 
@@ -135,29 +134,6 @@
       <canvas id="alienGame" width="400" height="450"></canvas>
       <button class="action" onclick="startAlien()">Start / Restart</button>
       <p id="scoreAlien">Score: 0</p>
-    </section>
-
-    <section id="popcorn" class="game">
-      <h2>Popcorn Multiplayer</h2>
-      <div id="popcorn-game">
-        <header id="popcorn-header">🍿 Popcorn Multiplayer</header>
-        <div id="popcorn-info">
-          <div>You: <span id="myScore">0</span></div>
-          <div>Friend: <span id="opScore">0</span></div>
-          <div>Miss: <span id="miss">0</span>/5</div>
-        </div>
-        <div id="popcorn-field"></div>
-        <div id="popcorn-mp">
-          <button onclick="host()">Host</button>
-          <button onclick="join()">Join</button>
-          <div id="status">Offline</div>
-        </div>
-        <div id="popcorn-gameover">
-          <h2>Game Over</h2>
-          <p>You: <span id="fMy"></span> | Friend: <span id="fOp"></span></p>
-          <button onclick="resetGame()">Restart</button>
-        </div>
-      </div>
     </section>
 
     <section id="leaderboard" class="game leaderboard">
@@ -446,6 +422,13 @@ function moveGrid(dir) {
     addTile();
     drawGrid();
   }
+}
+function showScoreButton() {
+  // Finds the button by its ID
+  var btn = document.getElementById("check-score-btn");
+  
+  // Makes the button visible
+  btn. style. display = "block"; 
 }
 
 function update2048Score() {
