@@ -122,7 +122,7 @@
 
     <section id="game2048" class="game">
       <h2>2048</h2>
-      <div id="game2048-2"></div>
+      <div id="game2048"></div>
       <p id="score2048">Score: 0</p>
       <button class="action" onclick="init2048()">Restart</button>
     </section>
@@ -376,7 +376,7 @@ function addTile() {
   grid[y][x] = Math.random()<0.9 ? 2 : 4;
 }
 function drawGrid() {
-  const container = document.getElementById('game2048-2');
+  const container = document.getElementById('game2048');
   container.innerHTML = '';
   for (let y=0;y<4;y++) {
     for (let x=0;x<4;x++) {
@@ -391,7 +391,7 @@ function drawGrid() {
       container.appendChild(tile);
     }
   }
-  document.getElementById('score2048-2').innerText = 'Score: ' + score2048;
+  document.getElementById('score2048').innerText = 'Score: ' + score2048;
 }
 function moveGrid(dir) {
   const rotMap = {w:3, a:0, s:1, d:2};
@@ -508,10 +508,10 @@ document.addEventListener('keydown', e => {
       moveGrid(key);
       e.preventDefault();
     }
-  }
-    if (key==='e') {
+    if (key==='e'){
       update2048score();
     }
+  }
   else if (id === 'alien') {
     if (key==='a') aPlayer.x -= 15;
     if (key==='d') aPlayer.x += 15;
