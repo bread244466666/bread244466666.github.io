@@ -125,7 +125,7 @@
       <div id="game2048"></div>
       <p id="score2048">Score: 0</p>
       <button class="action" onclick="init2048()">Restart</button>
-      <button id="check-score-btn" class="action" onclick="update2048Score()"</button>
+      <button id="check-score-btn" class="action" onclick="update2048Score()"></button>
 
     </section>
 
