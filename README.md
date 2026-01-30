@@ -125,6 +125,7 @@
       <div id="game2048"></div>
       <p id="score2048">Score: 0</p>
       <button class="action" onclick="init2048()">Restart</button>
+      <button class="action" onclick="update2048Score()">check score</button>
     </section>
 
     <section id="alien" class="game">
@@ -229,7 +230,7 @@ document.getElementById('unlock-name').onclick = () => {
 const LEADERBOARD_PATHS = {
   dodge: 'leaderboards/dodge',
   snake: 'leaderboards/snake',
-  '2048': 'leaderboards/2048',
+  2048: 'leaderboards/2048',
   alien: 'leaderboards/alien'
 };
 
@@ -442,6 +443,13 @@ function moveGrid(dir) {
   if (moved) {
     addTile();
     drawGrid();
+  }
+}
+function update2048Score() {
+  if (score2048 > 0) {
+    updateLeaderboard('2048', score2048);
+  } else {
+    alert("Your score is still 0 — play a bit first!");
   }
 }
 // ────────────────────────────────────────────────
