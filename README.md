@@ -123,9 +123,10 @@
     <section id="game2048" class="game">
       <h2>2048</h2>
       <div id="game2048"></div>
-        <button class="action" onclick="update2048Score()">check score</button>
       <p id="score2048">Score: 0</p>
       <button class="action" onclick="init2048()">Restart</button>
+     <button id="check-score-btn" class="action" onclick="update2048Score()" style="display:none;"></button>
+
     </section>
 
     <section id="alien" class="game">
@@ -389,7 +390,7 @@ const tileColors = {
 function init2048() {
   grid = Array(4).fill().map(()=>Array(4).fill(0));
   score2048 = 0;
-  addTile(); addTile();
+  addTile(); addTile(); showScoreButton();
   drawGrid();
 }
 function addTile() {
@@ -445,6 +446,14 @@ function moveGrid(dir) {
     drawGrid();
   }
 }
+function showScoreButton() {
+  // Finds the button by its ID
+  var btn = document.getElementById("check-score-btn");
+  
+  // Makes the button visible
+  btn.style.display = "block"; 
+}
+
 function update2048Score() {
   if (score2048 > 0) {
     updateLeaderboard('2048', score2048);
