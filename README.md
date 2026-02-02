@@ -120,11 +120,13 @@
       <button class="action" onclick="startSnake()">Start / Restart</button>
     </section>
 
+    <!-- HTML part stays mostly the same -->
     <section id="game2048" class="game">
-      <h2>2048</h2>
-      <div id="game2048"></div>
-      <p id="score2048">Score: 0</p>
-      <button class="action" onclick="init2048()">Restart</button>
+    <h2>2048</h2>
+    <div id="game2048"></div>
+    <p id="score2048">Score: 0</p>
+    <p id="message2048" style="min-height:1.5em; color:#fbbf24; font-weight:bold;"></p>
+    <button class="action" onclick="init2048()">Restart</button>
     </section>
 
     <section id="alien" class="game">
@@ -356,112 +358,151 @@ function sLoop() {
 // ────────────────────────────────────────────────
 // 2048
 // ────────────────────────────────────────────────
+// ────────────────────────────────────────────────
+// 2048
+// ────────────────────────────────────────────────
 let grid = [], score2048 = 0;
+let gameOver2048 = false;
+
 const tileColors = {
-  0:'#334155',2:'#eee4da',4:'#ede0c8',8:'#f2b179',16:'#f59563',
-  32:'#f67c5f',64:'#f65e3b',128:'#edcf72',256:'#edcc61',512:'#edc850',
-  1024:'#edc53f',2048:'#edc22e'
+  0:   '#334155',
+  2:   '#eee4da', 4:   '#ede0c8', 8:   '#f2b179', 16:  '#f59563',
+  32:  '#f67c5f', 64:  '#f65e3b', 128: '#edcf72', 256: '#edcc61',
+  512: '#edc850', 1024:'#edc53f', 2048:'#edc22e', 4096:'#3c3a32'
 };
+
 function init2048() {
-  grid = Array(4).fill().map(()=>Array(4).fill(0));
+  grid = Array(4).fill().map(() => Array(4).fill(0));
   score2048 = 0;
-  addTile(); addTile();
+  gameOver2048 = false;
+  document.getElementById('score2048').innerText = 'Score: 0';
+  document.getElementById('message2048').innerText = '';
+  addTile();
+  addTile();
   drawGrid();
 }
+
 function addTile() {
   const empty = [];
-  for (let y=0;y<4;y++) for (let x=0;x<4;x++) if (grid[y][x]===0) empty.push([y,x]);
-  if (!empty.length) return;
-  const [y,x] = empty[Math.floor(Math.random()*empty.length)];
-  grid[y][x] = Math.random()<0.9 ? 2 : 4;
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      if (grid[r][c] === 0) empty.push([r, c]);
+    }
+  }
+  if (empty.length === 0) return;
+  const [r, c] = empty[Math.floor(Math.random() * empty.length)];
+  grid[r][c] = Math.random() < 0.9 ? 2 : 4;
 }
+
 function drawGrid() {
   const container = document.getElementById('game2048');
   container.innerHTML = '';
-  for (let y=0;y<4;y++) {
-    for (let x=0;x<4;x++) {
-      const v = grid[y][x];
-      if (!v) continue;
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      const value = grid[r][c];
+      if (value === 0) continue;
       const tile = document.createElement('div');
       tile.className = 'tile';
-      tile.textContent = v;
-      tile.style.backgroundColor = tileColors[v] || '#3c3a32';
-      tile.style.left = (x*100 + 5) + 'px';
-      tile.style.top = (y*100 + 5) + 'px';
+      tile.textContent = value;
+      tile.style.backgroundColor = tileColors[value] || '#3c3a32';
+      tile.style.left = (c * 100 + 5) + 'px';
+      tile.style.top  = (r * 100 + 5) + 'px';
+      if (value >= 1024) {
+        tile.style.fontSize = '1.8rem';
+      }
       container.appendChild(tile);
     }
   }
   document.getElementById('score2048').innerText = 'Score: ' + score2048;
 }
-function moveGrid(dir) {
-  const rotMap = {w:3, a:0, s:1, d:2};
-  let rotations = rotMap[dir];
-  const rotate = m => m[0].map((_,i) => m.map(r => r[i]).reverse());
-  for (let i = 0; i < rotations; i++) grid = rotate(grid);
+
+function moveGrid(direction) {
+  if (gameOver2048) return;
+
+  const rotMap = { 'w': 3, 'a': 0, 's': 1, 'd': 2 };
+  let rotations = rotMap[direction.toLowerCase()];
+  if (rotations === undefined) return;
+
+  // Rotate board so we always slide left
+  let temp = grid;
+  for (let i = 0; i < rotations; i++) {
+    temp = temp[0].map((_, idx) => temp.map(row => row[idx]).reverse());
+  }
+  grid = temp;
+
   let moved = false;
-  for (let y = 0; y < 4; y++) {
-    let before = [...grid[y]];
-    let row = grid[y].filter(n => n !== 0);
+
+  for (let r = 0; r < 4; r++) {
+    let row = grid[r].filter(n => n !== 0);
     for (let i = 0; i < row.length - 1; i++) {
-      if (row[i] === row[i+1] && row[i] !== 0) {
+      if (row[i] === row[i + 1] && row[i] !== 0) {
         row[i] *= 2;
         score2048 += row[i];
-        row[i+1] = 0;
-        i++;
+        row[i + 1] = 0;
+        i++; // skip next
       }
     }
     row = row.filter(n => n !== 0);
     while (row.length < 4) row.push(0);
-    grid[y] = row;
-    if (!before.every((v,i) => v === row[i])) moved = true;
+    if (!grid[r].every((v, i) => v === row[i])) moved = true;
+    grid[r] = row;
   }
-  for (let i = 0; i < (4 - rotations) % 4; i++) grid = rotate(grid);
+
+  // Rotate back
+  for (let i = 0; i < (4 - rotations) % 4; i++) {
+    grid = grid[0].map((_, idx) => grid.map(row => row[idx]).reverse());
+  }
+
   if (moved) {
     addTile();
     drawGrid();
-    isGameOver();
+    checkGameOver();
   }
 }
+
+function checkGameOver() {
+  // Any empty cell?
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      if (grid[r][c] === 0) return;
+    }
+  }
+
+  // Any adjacent equal tiles?
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 3; c++) {
+      if (grid[r][c] === grid[r][c + 1]) return;
+    }
+  }
+  for (let c = 0; c < 4; c++) {
+    for (let r = 0; r < 3; r++) {
+      if (grid[r][c] === grid[r + 1][c]) return;
+    }
+  }
+
+  // No moves left → game over
+  gameOver2048 = true;
+  document.getElementById('message2048').innerText = 'Game Over! Final score saved.';
+  update2048Score();  // ← this pushes to leaderboard
+}
+
 function update2048Score() {
   if (score2048 > 0) {
     updateLeaderboard('2048', score2048);
-  } else {
-    alert("Your score is still 0 — play a bit first!");
   }
 }
-function isGameOver() {
-    // Step 1: Check for any empty cells
-    for (let r = 0; r < 4; r++) {
-        for (let c = 0; c < 4; c++) {
-            if (board[r][c] === 0) {
-                return false;
-            }
-        }
-    }
 
-    // Step 2: Check for possible horizontal merges
-    for (let r = 0; r < 4; r++) {
-        for (let c = 0; c < 3; c++) {
-            if (board[r][c] === board[r][c + 1]) {
-                return false;
-            }
-        }
-    }
+// ── Key handler part (already in your code, just make sure it calls moveGrid) ──
+document.addEventListener('keydown', e => {
+  const key = e.key.toLowerCase();
+  const visible = document.querySelector('.game:not([style*="display: none"])');
+  if (!visible || visible.id !== 'game2048') return;
 
-    // Step 3: Check for possible vertical merges
-    for (let c = 0; c < 4; c++) {
-        for (let r = 0; r < 3; r++) {
-            if (board[r][c] === board[r + 1][c]) {
-                return false;
-            }
-        }
-    }
-
-    // If we reach this point → game is truly over
-    update2048score();   // ← call your score update / finalization function here
-
-    return true;
-}
+  if (['w','a','s','d'].includes(key)) {
+    moveGrid(key);
+    e.preventDefault();
+  }
+});
 // ────────────────────────────────────────────────
 // ALIEN SHOOTER
 // ────────────────────────────────────────────────
