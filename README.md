@@ -421,7 +421,9 @@ function moveGrid(dir) {
     drawGrid();
   }
 }
-
+if moved=false{
+  update2048Score();
+}
 function update2048Score() {
   if (score2048 > 0) {
     updateLeaderboard('2048', score2048);
@@ -509,7 +511,7 @@ document.addEventListener('keydown', e => {
       e.preventDefault();
     }
     if (key==='e'){
-      update2048Score()
+      update2048Score();
     }
   }
   else if (id === 'alien') {
