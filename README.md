@@ -419,6 +419,7 @@ function moveGrid(dir) {
   if (moved) {
     addTile();
     drawGrid();
+    isGameOver();
   }
 }
 function update2048Score() {
@@ -427,6 +428,39 @@ function update2048Score() {
   } else {
     alert("Your score is still 0 — play a bit first!");
   }
+}
+function isGameOver() {
+    // Step 1: Check for any empty cells
+    for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+            if (board[r][c] === 0) {
+                return false;
+            }
+        }
+    }
+
+    // Step 2: Check for possible horizontal merges
+    for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 3; c++) {
+            if (board[r][c] === board[r][c + 1]) {
+                return false;
+            }
+        }
+    }
+
+    // Step 3: Check for possible vertical merges
+    for (let c = 0; c < 4; c++) {
+        for (let r = 0; r < 3; r++) {
+            if (board[r][c] === board[r + 1][c]) {
+                return false;
+            }
+        }
+    }
+
+    // If we reach this point → game is truly over
+    update2048score();   // ← call your score update / finalization function here
+
+    return true;
 }
 // ────────────────────────────────────────────────
 // ALIEN SHOOTER
@@ -508,7 +542,7 @@ document.addEventListener('keydown', e => {
       e.preventDefault();
     }
     if (key==='e'){
-      update2048Score()
+      update2048Score();
     }
   }
   else if (id === 'alien') {
