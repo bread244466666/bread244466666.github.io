@@ -575,9 +575,6 @@ document.addEventListener('keydown', e => {
       moveGrid(key);
       e.preventDefault();
     }
-    if (key==='e'){
-      update2048Score();
-    }
   }
   else if (id === 'alien') {
     if (key==='a') aPlayer.x -= 15;
