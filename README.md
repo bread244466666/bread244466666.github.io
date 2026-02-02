@@ -421,9 +421,6 @@ function moveGrid(dir) {
     drawGrid();
   }
 }
-if moved=false{
-  update2048Score()
-}
 function update2048Score() {
   if (score2048 > 0) {
     updateLeaderboard('2048', score2048);
