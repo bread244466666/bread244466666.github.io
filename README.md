@@ -15,6 +15,15 @@
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5757280493155757"
      crossorigin="anonymous"></script>
 <!-- ? -->
+<ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="ca-pub-5757280493155757"
+     data-ad-slot="4821100611"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+<script>
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5757280493155757"
      crossorigin="anonymous"></script>
 <style>
@@ -94,19 +103,10 @@
     <button onclick="showGame('leaderboard')">Leaderboard</button>
   </nav>
   <main>
-    <!-- Added style="display:block" to make it visible immediately -->
-    <section id="ad" style="display:block; background:none; box-shadow:none;">
-    <ins class="adsbygoogle"
-         style="display:block"
-         data-ad-client="ca-pub-5757280493155757"
-         data-ad-slot="4821100611"
-         data-ad-format="auto"
-         data-full-width-responsive="true"></ins>
-      <script>
-         (adsbygoogle = window.adsbygoogle || []).push({});
-      </script>
+    <section id="home" class="game" style="display:block">
+      <h2>Welcome, <span id="player-name-home">Guest</span>!</h2>
+      <p>Play any game → your score will appear on the global leaderboard!</p>
     </section>
-
 
     <section id="dodge" class="game">
       <h2>Dodge the Blocks</h2>
@@ -124,7 +124,8 @@
     <!-- HTML part stays mostly the same -->
     <section id="game2048" class="game">
     <h2>2048</h2>
-    <div id="board2048"></div>
+    <div id="game2048"></div>
+    <p id="score2048">Score: 0</p>
     <p id="score2048">Score: 0</p>
     <div id="message2048" style="min-height:1.5em; color:#ef4444; font-weight:bold;"></div>
     <button class="action" onclick="init2048()">Restart</button>
@@ -170,7 +171,7 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
-const db = firebase.database(); // Finish the word "con" to "const"
+const db = firebase.database();
 
 let currentPlayerName = 'Guest';
 const CORRECT_PASSWORD = 'bread';
@@ -407,7 +408,7 @@ function drawGrid() {
       container.appendChild(tile);
     }
   }
-  document.getElementById('board2048').innerText = 'Score: ' + score2048;
+  document.getElementById('score2048').innerText = 'Score: ' + score2048;
 }
 
 function moveGrid(dir) {
@@ -460,7 +461,7 @@ function moveGrid(dir) {
     msg.style.color = '#ef4444';
     msg.style.fontWeight = 'bold';
     msg.innerText = 'Game Over! Score saved to leaderboard.';
-    document.getElementById('board2048').parentNode.insertBefore(msg, document.getElementById('score2048').nextSibling);
+    document.getElementById('game2048').parentNode.insertBefore(msg, document.getElementById('score2048').nextSibling);
   }
 }
 
