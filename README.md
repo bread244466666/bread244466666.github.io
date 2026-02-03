@@ -92,7 +92,7 @@
     <h1>🎮 Mini Game Arcade</h1>
     <p id="welcome-message">Welcome, <span id="player-name">Guest</span>!</p>
     <p>Use <strong>W A S D</strong> • Space = shoot (Alien only)</p>
-    <iframe width="1128" height="634" src="https://www.youtube.com/embed/n8X9_MgEdCg" title="TheFatRat - Unity" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+    <iframe width="200" height="112.4113" src="https://www.youtube.com/embed/n8X9_MgEdCg" title="TheFatRat - Unity" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
   </header>
   <nav>
     <button onclick="showGame('home')">Home</button>
