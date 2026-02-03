@@ -593,15 +593,19 @@ const notes = {
   f: 587.33    // D5
 };
 
-function playNote(key) {
-  if (activeOsc[key]) return;
+function playNote(key, duration = 0.15) {
+  if (activeOsc[key]) {
+    activeOsc[key].stop();
+    delete activeOsc[key];
+  }
+
   const osc = audioCtx.createOscillator();
-  osc.type = 'sine';
+  osc.type = 'sine';           // Try 'square' for retro game feel
   osc.frequency.value = notes[key];
 
   const gain = audioCtx.createGain();
   gain.gain.setValueAtTime(0.35, audioCtx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.1);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
 
   osc.connect(gain);
   gain.connect(audioCtx.destination);
@@ -610,24 +614,35 @@ function playNote(key) {
   activeOsc[key] = osc;
 
   const el = document.querySelector(`.key[data-key="${key}"]`);
-  if (el) el.classList.add('active');
+  if (el) {
+    el.classList.add('active');
+    setTimeout(() => el.classList.remove('active'), duration * 1000 + 50);
+  }
+
+  // Auto-stop after duration
+  setTimeout(() => {
+    if (activeOsc[key]) {
+      activeOsc[key].stop();
+      delete activeOsc[key];
+    }
+  }, duration * 1000 + 20);
 }
 
 function stopNote(key) {
-  if (!activeOsc[key]) return;
-  activeOsc[key].stop();
-  delete activeOsc[key];
-
+  if (activeOsc[key]) {
+    activeOsc[key].stop();
+    delete activeOsc[key];
+  }
   const el = document.querySelector(`.key[data-key="${key}"]`);
   if (el) el.classList.remove('active');
 }
 
-// Keyboard input
+// ─── Manual play (keyboard) ────────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.repeat) return;
   const k = e.key.toLowerCase();
   if (notes[k] && document.getElementById('music').style.display === 'block') {
-    playNote(k);
+    playNote(k, 1.2);   // longer sustain when holding
   }
 });
 
@@ -638,16 +653,55 @@ document.addEventListener('keyup', e => {
   }
 });
 
-// Also support mouse/touch on the buttons
+// Mouse / touch support
 document.querySelectorAll('.key').forEach(el => {
   const key = el.dataset.key;
-  el.addEventListener('mousedown', () => playNote(key));
-  el.addEventListener('mouseup',   () => stopNote(key));
-  el.addEventListener('mouseleave',() => stopNote(key));
+  const play = () => playNote(key, 1.0);
+  const stop = () => stopNote(key);
 
-  // Touch support (mobile)
-  el.addEventListener('touchstart', e => { e.preventDefault(); playNote(key); });
-  el.addEventListener('touchend',   e => { e.preventDefault(); stopNote(key); });
+  el.addEventListener('mousedown', play);
+  el.addEventListener('mouseup', stop);
+  el.addEventListener('mouseleave', stop);
+
+  el.addEventListener('touchstart', e => { e.preventDefault(); play(); });
+  el.addEventListener('touchend',   e => { e.preventDefault(); stop(); });
+});
+
+// ─── Auto-play famous song (Super Mario Bros intro – adapted) ─────
+const marioMelody = [
+  {key:'d', dur:0.18}, {key:'d', dur:0.18}, {key:'d', dur:0.36},    // E E E
+  {key:'a', dur:0.12}, {key:'d', dur:0.24},                         // C E
+  {key:'f', dur:0.48},                                              // G (long)
+  {key:'a', dur:0.18}, {key:'d', dur:0.18}, {key:'d', dur:0.36},    // C E E
+  {key:'a', dur:0.12}, {key:'d', dur:0.24},                         // C E
+  {key:'f', dur:0.48},                                              // G (long)
+  // ... you can extend it more if you want
+];
+
+let isPlayingSong = false;
+
+document.getElementById('play-mario-btn')?.addEventListener('click', () => {
+  if (isPlayingSong) return;
+  isPlayingSong = true;
+  document.getElementById('play-mario-btn').disabled = true;
+  document.getElementById('play-mario-btn').textContent = "Playing... 🎵";
+
+  let time = audioCtx.currentTime;
+  const tempo = 1.0;  // speed multiplier (lower = faster)
+
+  marioMelody.forEach(note => {
+    setTimeout(() => {
+      playNote(note.key, note.dur * tempo);
+    }, (time - audioCtx.currentTime) * 1000);
+
+    time += note.dur * tempo;
+  });
+
+  setTimeout(() => {
+    isPlayingSong = false;
+    document.getElementById('play-mario-btn').disabled = false;
+    document.getElementById('play-mario-btn').textContent = "Play Super Mario Theme Intro";
+  }, (time - audioCtx.currentTime + 0.5) * 1000);
 });
 
 // ─── INPUT (updated to include music game keys) ─────────────
