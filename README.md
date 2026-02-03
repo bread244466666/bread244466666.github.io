@@ -125,8 +125,6 @@
     <section id="game2048" class="game">
     <h2>2048</h2>
     <div id="game2048"></div>
-    <p id="score2048">Score: 0</p>
-    <p id="score2048">Score: 0</p>
     <div id="message2048" style="min-height:1.5em; color:#ef4444; font-weight:bold;"></div>
     <button class="action" onclick="init2048()">Restart</button>
     </section>
