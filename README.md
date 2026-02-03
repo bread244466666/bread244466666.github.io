@@ -15,15 +15,6 @@
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5757280493155757"
      crossorigin="anonymous"></script>
 <!-- ? -->
-<ins class="adsbygoogle"
-     style="display:block"
-     data-ad-client="ca-pub-5757280493155757"
-     data-ad-slot="4821100611"
-     data-ad-format="auto"
-     data-full-width-responsive="true"></ins>
-<script>
-     (adsbygoogle = window.adsbygoogle || []).push({});
-</script>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5757280493155757"
      crossorigin="anonymous"></script>
 <style>
@@ -92,7 +83,7 @@
     <h1>🎮 Mini Game Arcade</h1>
     <p id="welcome-message">Welcome, <span id="player-name">Guest</span>!</p>
     <p>Use <strong>W A S D</strong> • Space = shoot (Alien only)</p>
-    <iframe width="200" height="112.4113" src="https://www.youtube.com/embed/n8X9_MgEdCg" title="TheFatRat - Unity" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+    <iframe width="500" height="300" src="https://www.youtube.com/embed/xevfX_B1Lbw" title="TheFatRat - Unity No Vocals 1 Hour" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
   </header>
   <nav>
     <button onclick="showGame('home')">Home</button>
@@ -103,10 +94,19 @@
     <button onclick="showGame('leaderboard')">Leaderboard</button>
   </nav>
   <main>
-    <section id="home" class="game" style="display:block">
-      <h2>Welcome, <span id="player-name-home">Guest</span>!</h2>
-      <p>Play any game → your score will appear on the global leaderboard!</p>
+    <!-- Added style="display:block" to make it visible immediately -->
+    <section id="ad" style="display:block; background:none; box-shadow:none;">
+    <ins class="adsbygoogle"
+         style="display:block"
+         data-ad-client="ca-pub-5757280493155757"
+         data-ad-slot="4821100611"
+         data-ad-format="auto"
+         data-full-width-responsive="true"></ins>
+      <script>
+         (adsbygoogle = window.adsbygoogle || []).push({});
+      </script>
     </section>
+
 
     <section id="dodge" class="game">
       <h2>Dodge the Blocks</h2>
@@ -124,8 +124,7 @@
     <!-- HTML part stays mostly the same -->
     <section id="game2048" class="game">
     <h2>2048</h2>
-    <div id="game2048"></div>
-    <p id="score2048">Score: 0</p>
+    <div id="board2048"></div>
     <p id="score2048">Score: 0</p>
     <div id="message2048" style="min-height:1.5em; color:#ef4444; font-weight:bold;"></div>
     <button class="action" onclick="init2048()">Restart</button>
@@ -171,7 +170,7 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+const db = firebase.database(); // Finish the word "con" to "const"
 
 let currentPlayerName = 'Guest';
 const CORRECT_PASSWORD = 'bread';
@@ -408,7 +407,7 @@ function drawGrid() {
       container.appendChild(tile);
     }
   }
-  document.getElementById('score2048').innerText = 'Score: ' + score2048;
+  document.getElementById('board2048').innerText = 'Score: ' + score2048;
 }
 
 function moveGrid(dir) {
@@ -461,7 +460,7 @@ function moveGrid(dir) {
     msg.style.color = '#ef4444';
     msg.style.fontWeight = 'bold';
     msg.innerText = 'Game Over! Score saved to leaderboard.';
-    document.getElementById('game2048').parentNode.insertBefore(msg, document.getElementById('score2048').nextSibling);
+    document.getElementById('board2048').parentNode.insertBefore(msg, document.getElementById('score2048').nextSibling);
   }
 }
 
