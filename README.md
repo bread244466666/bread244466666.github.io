@@ -73,7 +73,6 @@
     border: 3px solid #4f46e5;
     border-radius: 12px;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
     font-size: 3rem;
@@ -82,34 +81,17 @@
     transition: all 0.12s ease;
     user-select: none;
   }
-  #music .key small {
-    font-size: 1rem;
-    color: #94a3b8;
-    margin-top: 8px;
-  }
   #music .key.active {
     background: #7c3aed;
     transform: scale(1.08);
     box-shadow: 0 0 30px #7c3aed88;
     color: white;
   }
-  #music .key.next {
-    border-color: #fbbf24;
-    box-shadow: 0 0 15px #fbbf2488;
-    color: #fbbf24;
-  }
   #music .hint {
     text-align: center;
     color: #94a3b8;
     font-size: 1.1rem;
     margin: 20px 0;
-  }
-  #music .status-msg {
-    text-align: center;
-    font-size: 1.2rem;
-    color: #60a5fa;
-    margin: 20px 0;
-    min-height: 1.5em;
   }
 </style>
 </head>
@@ -183,25 +165,16 @@
       <p id="scoreAlien">Score: 0</p>
     </section>
 
-    <!-- ─── UPDATED MUSIC GAME SECTION ─── -->
+    <!-- ─── NEW MUSIC GAME SECTION ─── -->
     <section id="music" class="game">
-      <h2>ASDF Music – Learn the Song!</h2>
-      <p class="hint">Press the highlighted key to play the note and reveal the next one.<br>Play manually anytime with <strong>A S D F</strong>.</p>
-      
-      <button class="action" id="start-tutorial-btn" style="font-size:1.3rem; padding:14px 32px; margin:20px 0;">Start Super Mario Tutorial</button>
-      
-      <div id="music-status" class="status-msg"></div>
-      
+      <h2>ASDF Music</h2>
+      <p class="hint">Press <strong>A S D F</strong> to play notes<br>(hold to sustain – works on keyboard & mobile tap too)</p>
       <div class="keys">
-        <div class="key" data-key="a">A<br><small>440 Hz</small></div>
-        <div class="key" data-key="s">S<br><small>494 Hz</small></div>
-        <div class="key" data-key="d">D<br><small>523 Hz</small></div>
-        <div class="key" data-key="f">F<br><small>587 Hz</small></div>
+        <div class="key" data-key="a">A</div>
+        <div class="key" data-key="s">S</div>
+        <div class="key" data-key="d">D</div>
+        <div class="key" data-key="f">F</div>
       </div>
-      
-      <p style="margin-top:40px; color:#94a3b8; font-style:italic;">
-        Tip: Get it right to advance • Wrong key? Try again!
-      </p>
     </section>
 
     <section id="leaderboard" class="game leaderboard">
@@ -224,6 +197,128 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 
 <script>
+// ─── Firebase Config ────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyANLp5iTUBM9isYt3nRaxYt9fZ-qc-Lsts",
+  authDomain: "minigamearcade-373e5.firebaseapp.com",
+  databaseURL: "https://minigamearcade-373e5-default-rtdb.firebaseio.com",
+  projectId: "minigamearcade-373e5",
+  storageBucket: "minigamearcade-373e5.firebasestorage.app",
+  messagingSenderId: "347058693088",
+  appId: "1:347058693088:web:41e1b5da9cbc5567aa0185",
+  measurementId: "G-PMXHFHMQSZ"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+let currentPlayerName = 'Guest';
+const CORRECT_PASSWORD = 'bread';
+
+// ─── PASSWORD + NAME ENTRY ──────────────────────────────────
+document.getElementById('unlock-password').onclick = () => {
+  const input = document.getElementById('password-input').value.trim();
+  if (input === CORRECT_PASSWORD) {
+    document.getElementById('password-screen').classList.add('hidden');
+    document.getElementById('name-screen').classList.remove('hidden');
+    document.getElementById('name-input').focus();
+  } else {
+    document.getElementById('password-error').textContent = 'Wrong password';
+  }
+};
+
+document.getElementById('unlock-name').onclick = () => {
+  const name = document.getElementById('name-input').value.trim();
+  if (name) {
+    currentPlayerName = name;
+    document.getElementById('player-name').textContent = name;
+    document.getElementById('player-name-home').textContent = name;
+    document.getElementById('name-screen').classList.add('hidden');
+    document.getElementById('main-content').style.display = 'block';
+    renderAll();
+  } else {
+    document.getElementById('name-error').textContent = 'Enter a name';
+  }
+};
+
+// ─── LEADERBOARD ────────────────────────────────────────────
+const LEADERBOARD_PATHS = {
+  dodge: 'leaderboards/dodge',
+  snake: 'leaderboards/snake',
+  2048: 'leaderboards/2048',
+  alien: 'leaderboards/alien'
+};
+
+function updateLeaderboard(game, score) {
+  if (!currentPlayerName || score <= 0) return;
+  const path = LEADERBOARD_PATHS[game];
+  const safeName = currentPlayerName.replace(/[.#$[\]]/g, '_');
+  const ref = db.ref(path + '/' + safeName);
+  ref.once('value', snap => {
+    const data = snap.val();
+    if (!data || score > data.score) {
+      ref.set({
+        name: currentPlayerName,
+        score: score,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+      });
+    }
+  });
+}
+
+function renderLeaderboard(game) {
+  const tbody = document.querySelector(`#lb-${game} tbody`);
+  tbody.innerHTML = '<tr><td colspan="3" class="loading-msg">Loading global scores...</td></tr>';
+  const path = LEADERBOARD_PATHS[game];
+  db.ref(path).orderByChild('score').limitToLast(10).once('value', snap => {
+    tbody.innerHTML = '';
+    let entries = [];
+    snap.forEach(child => {
+      const d = child.val();
+      entries.push({ name: d.name || child.key, score: d.score });
+    });
+    entries.sort((a,b) => b.score - a.score);
+    if (entries.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" class="empty-msg">No scores yet — be the first!</td></tr>';
+      return;
+    }
+    entries.forEach((e, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td class="rank">${i+1}</td><td>${e.name}</td><td class="score">${e.score.toLocaleString()}</td>`;
+      tbody.appendChild(tr);
+    });
+  });
+}
+
+function renderAll() {
+  ['dodge','snake','2048','alien'].forEach(renderLeaderboard);
+}
+
+Object.values(LEADERBOARD_PATHS).forEach(path => {
+  db.ref(path).on('value', () => {
+    if (document.getElementById('leaderboard').style.display !== 'none') {
+      renderAll();
+    }
+  });
+});
+
+// ─── GAME SWITCHER ──────────────────────────────────────────
+let dodgeRafId = null;
+let snakeTimer = null;
+let alienTimer = null;
+
+function showGame(id) {
+  document.querySelectorAll('.game').forEach(g => g.style.display = 'none');
+  document.getElementById(id).style.display = 'block';
+  if (id === 'leaderboard') renderAll();
+
+  if (id !== 'dodge' && dodgeRafId) cancelAnimationFrame(dodgeRafId);
+  if (id !== 'snake' && snakeTimer) clearInterval(snakeTimer);
+  if (id !== 'alien' && alienTimer) clearInterval(alienTimer);
+  ['dodgeGame','snakeGame','alienGame'].forEach(cid => {
+    const c = document.getElementById(cid);
+    if (c) c.getContext('2d')?.clearRect(0,0,c.width,c.height);
+  });
+}
 
 // ────────────────────────────────────────────────
 // DODGE
@@ -295,9 +390,6 @@ function sLoop() {
   snake.forEach(p => sctx.fillRect(p.x*20, p.y*20, 20, 20));
 }
 
-// ────────────────────────────────────────────────
-// 2048
-// ────────────────────────────────────────────────
 // ────────────────────────────────────────────────
 // 2048
 // ────────────────────────────────────────────────
@@ -508,7 +600,7 @@ function playNote(key, duration = 0.15) {
   }
 
   const osc = audioCtx.createOscillator();
-  osc.type = 'sine';  // 'square' for retro
+  osc.type = 'sine';           // Try 'square' for retro game feel
   osc.frequency.value = notes[key];
 
   const gain = audioCtx.createGain();
@@ -527,7 +619,13 @@ function playNote(key, duration = 0.15) {
     setTimeout(() => el.classList.remove('active'), duration * 1000 + 50);
   }
 
-  setTimeout(() => stopNote(key), duration * 1000);
+  // Auto-stop after duration
+  setTimeout(() => {
+    if (activeOsc[key]) {
+      activeOsc[key].stop();
+      delete activeOsc[key];
+    }
+  }, duration * 1000 + 20);
 }
 
 function stopNote(key) {
@@ -539,108 +637,108 @@ function stopNote(key) {
   if (el) el.classList.remove('active');
 }
 
-// ─── Manual play (always available) ─────────────────────────
+// ─── Manual play (keyboard) ────────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.repeat) return;
   const k = e.key.toLowerCase();
   if (notes[k] && document.getElementById('music').style.display === 'block') {
-    playNote(k, 0.3);  // short for manual
+    playNote(k, 1.2);   // longer sustain when holding
   }
 });
 
 document.addEventListener('keyup', e => {
   const k = e.key.toLowerCase();
-  if (notes[k]) stopNote(k);
+  if (notes[k] && document.getElementById('music').style.display === 'block') {
+    stopNote(k);
+  }
 });
 
-// Mouse/touch for manual
+// Mouse / touch support
 document.querySelectorAll('.key').forEach(el => {
   const key = el.dataset.key;
-  el.addEventListener('mousedown', () => playNote(key, 0.3));
-  el.addEventListener('mouseup', () => stopNote(key));
-  el.addEventListener('mouseleave', () => stopNote(key));
+  const play = () => playNote(key, 1.0);
+  const stop = () => stopNote(key);
 
-  el.addEventListener('touchstart', e => { e.preventDefault(); playNote(key, 0.3); });
-  el.addEventListener('touchend', e => { e.preventDefault(); stopNote(key); });
+  el.addEventListener('mousedown', play);
+  el.addEventListener('mouseup', stop);
+  el.addEventListener('mouseleave', stop);
+
+  el.addEventListener('touchstart', e => { e.preventDefault(); play(); });
+  el.addEventListener('touchend',   e => { e.preventDefault(); stop(); });
 });
 
-// ─── Song Tutorial Mode ─────────────────────────────────────
-const marioSequence = [
-  {key: 'd', dur: 0.18},  // E
-  {key: 'd', dur: 0.18},  // E
-  {key: 'd', dur: 0.36},  // E (long)
-  {key: 'a', dur: 0.12},  // C
-  {key: 'd', dur: 0.24},  // E
-  {key: 'f', dur: 0.48},  // G (long)
-  {key: 'a', dur: 0.18},  // C
-  {key: 'd', dur: 0.18},  // E
-  {key: 'd', dur: 0.36},  // E (long)
-  {key: 'a', dur: 0.12},  // C
-  {key: 'd', dur: 0.24},  // E
-  {key: 'f', dur: 0.48}   // G (long)
+// ─── Auto-play famous song (Super Mario Bros intro – adapted) ─────
+const marioMelody = [
+  {key:'d', dur:0.18}, {key:'d', dur:0.18}, {key:'d', dur:0.36},    // E E E
+  {key:'a', dur:0.12}, {key:'d', dur:0.24},                         // C E
+  {key:'f', dur:0.48},                                              // G (long)
+  {key:'a', dur:0.18}, {key:'d', dur:0.18}, {key:'d', dur:0.36},    // C E E
+  {key:'a', dur:0.12}, {key:'d', dur:0.24},                         // C E
+  {key:'f', dur:0.48},                                              // G (long)
+  // ... you can extend it more if you want
 ];
 
-let currentIndex = -1;
-let inTutorial = false;
+let isPlayingSong = false;
 
-function highlightNext() {
-  document.querySelectorAll('.key').forEach(el => el.classList.remove('next'));
-  if (currentIndex < marioSequence.length) {
-    const nextKey = marioSequence[currentIndex].key;
-    const el = document.querySelector(`.key[data-key="${nextKey}"]`);
-    if (el) el.classList.add('next');
-    document.getElementById('music-status').textContent = currentIndex === -1 ? '' : `Press the highlighted key (${nextKey.toUpperCase()})!`;
-  } else {
-    document.getElementById('music-status').textContent = 'Well done! You played the song! 🎉';
-    document.getElementById('start-tutorial-btn').textContent = 'Restart Tutorial';
-    inTutorial = false;
-  }
-}
+document.getElementById('play-mario-btn')?.addEventListener('click', () => {
+  if (isPlayingSong) return;
+  isPlayingSong = true;
+  document.getElementById('play-mario-btn').disabled = true;
+  document.getElementById('play-mario-btn').textContent = "Playing... 🎵";
 
-document.getElementById('start-tutorial-btn')?.addEventListener('click', () => {
-  currentIndex = 0;
-  inTutorial = true;
-  document.getElementById('start-tutorial-btn').textContent = 'Tutorial in Progress...';
-  document.getElementById('music-status').textContent = 'Press the highlighted key!';
-  highlightNext();
-});
+  let time = audioCtx.currentTime;
+  const tempo = 1.0;  // speed multiplier (lower = faster)
 
-// ─── Keydown for tutorial ───────────────────────────────────
-document.addEventListener('keydown', e => {
-  const k = e.key.toLowerCase();
-  if (!inTutorial || e.repeat || document.getElementById('music').style.display !== 'block') return;
-
-  const expected = marioSequence[currentIndex]?.key;
-  if (k === expected) {
-    playNote(k, marioSequence[currentIndex].dur);
-    currentIndex++;
-    highlightNext();
-  } else {
-    // Wrong key: short error beep (using 'a' as low note)
-    playNote('a', 0.1);
-    document.getElementById('music-status').textContent = 'Oops! Wrong key. Try again.';
+  marioMelody.forEach(note => {
     setTimeout(() => {
-      document.getElementById('music-status').textContent = `Press ${expected.toUpperCase()}!`;
-    }, 800);
-  }
+      playNote(note.key, note.dur * tempo);
+    }, (time - audioCtx.currentTime) * 1000);
+
+    time += note.dur * tempo;
+  });
+
+  setTimeout(() => {
+    isPlayingSong = false;
+    document.getElementById('play-mario-btn').disabled = false;
+    document.getElementById('play-mario-btn').textContent = "Play Super Mario Theme Intro";
+  }, (time - audioCtx.currentTime + 0.5) * 1000);
 });
 
-// Reset tutorial when switching games
-const originalShowGame = showGame;
-showGame = function(id) {
-  originalShowGame(id);
-  if (id !== 'music') {
-    inTutorial = false;
-    currentIndex = -1;
-    document.querySelectorAll('.key').forEach(el => el.classList.remove('next'));
-    if (document.getElementById('start-tutorial-btn')) {
-      document.getElementById('start-tutorial-btn').textContent = 'Start Super Mario Tutorial';
-    }
-    document.getElementById('music-status').textContent = '';
-  }
-};
+// ─── INPUT (updated to include music game keys) ─────────────
+document.addEventListener('keydown', e => {
+  const key = e.key.toLowerCase();
+  const visible = document.querySelector('.game:not([style*="display: none"])');
+  if (!visible) return;
+  const id = visible.id;
 
-// ─── INPUT (your original input code remains unchanged)
+  if (id === 'dodge') {
+    if (key==='a') player.x -= 22;
+    if (key==='d') player.x += 22;
+    player.x = Math.max(0, Math.min(360, player.x));
+  }
+  else if (id === 'snake') {
+    if (key==='w' && dir.y !== 1) dir = {x:0,y:-1};
+    if (key==='s' && dir.y !== -1) dir = {x:0,y:1};
+    if (key==='a' && dir.x !== 1) dir = {x:-1,y:0};
+    if (key==='d' && dir.x !== -1) dir = {x:1,y:0};
+  }
+  else if (id === 'game2048') {
+    if (['w','a','s','d'].includes(key)) {
+      moveGrid(key);
+      e.preventDefault();
+    }
+  }
+  else if (id === 'alien') {
+    if (key==='a') aPlayer.x -= 15;
+    if (key==='d') aPlayer.x += 15;
+    aPlayer.x = Math.max(0, Math.min(370, aPlayer.x));
+    if (e.key === ' ') {
+      bullets.push({x:aPlayer.x, y:aPlayer.y - aPlayer.h/2});
+      e.preventDefault();
+    }
+  }
+  // Music game keys are already handled separately above
+});
 </script>
 </body>
 </html>
