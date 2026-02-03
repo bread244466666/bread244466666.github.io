@@ -1,20 +1,21 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Mini Game Arcade – Password Protected</title>
+
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-XG59Q3C7MW"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-
   gtag('config', 'G-XG59Q3C7MW');
 </script>
+
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5757280493155757"
      crossorigin="anonymous"></script>
-<!-- ? -->
 <ins class="adsbygoogle"
      style="display:block"
      data-ad-client="ca-pub-5757280493155757"
@@ -24,17 +25,14 @@
 <script>
      (adsbygoogle = window.adsbygoogle || []).push({});
 </script>
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5757280493155757"
-     crossorigin="anonymous"></script>
+
 <style>
   body { margin:0; font-family:Arial, Helvetica, sans-serif; background:#020617; color:#e5e7eb; min-height:100vh; }
   header { padding:30px; text-align:center; background:linear-gradient(135deg,#2563eb,#4f46e5); }
- 
   #password-screen, #name-screen {
     position:fixed; inset:0; background:#020617; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:20px; z-index:100;
   }
   #password-screen.hidden, #name-screen.hidden { display:none; }
- 
   input[type="password"], input[type="text"] {
     padding:14px 18px; font-size:1.2rem; width:320px; max-width:90%; border-radius:8px;
     border:2px solid #4f46e5; background:#1e293b; color:white;
@@ -42,19 +40,15 @@
   button.unlock-btn { padding:14px 40px; font-size:1.2rem; background:#2563eb; color:white; border:none; border-radius:8px; cursor:pointer; }
   button.unlock-btn:hover { background:#1d4ed8; }
   .error-msg { color:#ef4444; font-size:1.1rem; min-height:1.5em; }
- 
   nav { display:flex; justify-content:center; gap:15px; padding:15px; background:#020617; border-bottom:1px solid #1e293b; flex-wrap:wrap; }
   nav button { padding:10px 18px; border:none; border-radius:8px; background:#1e40af; color:white; cursor:pointer; font-size:0.95rem; }
   nav button:hover { background:#1d4ed8; }
- 
   main { max-width:960px; margin:30px auto; padding:0 20px; }
   .game { display:none; background:#020617; border-radius:14px; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
   canvas { display:block; margin:20px auto; background:black; border-radius:10px; }
   button.action { padding:10px 20px; border:none; border-radius:8px; background:#2563eb; color:white; cursor:pointer; margin-top:10px; }
- 
   #game2048 { display:block; margin:20px auto; width:400px; height:400px; position:relative; background:#111827; border-radius:10px; }
   .tile { width:90px; height:90px; position:absolute; display:flex; align-items:center; justify-content:center; font-size:2rem; font-weight:bold; border-radius:10px; color:white; transition:all 0.15s ease; }
-
   .leaderboard h2 { color:#60a5fa; margin-top:30px; }
   table { width:100%; border-collapse:collapse; margin:16px 0; background:#1e293b; border-radius:10px; overflow:hidden; }
   th, td { padding:12px 16px; text-align:left; border-bottom:1px solid #334155; }
@@ -64,8 +58,41 @@
   tr:hover { background:#253549; }
   .empty-msg, .loading-msg { text-align:center; padding:30px; color:#64748b; font-style:italic; }
 
-  /* Popcorn Multiplayer Styles (adjusted for dark theme) */
-  
+  /* ─── Music Game Styles ─── */
+  #music .keys {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin: 60px 0;
+    flex-wrap: wrap;
+  }
+  #music .key {
+    width: 90px;
+    height: 140px;
+    background: #1e293b;
+    border: 3px solid #4f46e5;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    font-weight: bold;
+    color: #60a5fa;
+    transition: all 0.12s ease;
+    user-select: none;
+  }
+  #music .key.active {
+    background: #7c3aed;
+    transform: scale(1.08);
+    box-shadow: 0 0 30px #7c3aed88;
+    color: white;
+  }
+  #music .hint {
+    text-align: center;
+    color: #94a3b8;
+    font-size: 1.1rem;
+    margin: 20px 0;
+  }
 </style>
 </head>
 <body>
@@ -91,17 +118,20 @@
   <header>
     <h1>🎮 Mini Game Arcade</h1>
     <p id="welcome-message">Welcome, <span id="player-name">Guest</span>!</p>
-    <p>Use <strong>W A S D</strong> • Space = shoot (Alien only)</p>
+    <p>Use <strong>W A S D</strong> • Space = shoot (Alien only) • A S D F = notes (Music)</p>
     <iframe width="500" height="300" src="https://www.youtube.com/embed/xevfX_B1Lbw" title="TheFatRat - Unity No Vocals 1 Hour" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
   </header>
+
   <nav>
     <button onclick="showGame('home')">Home</button>
     <button onclick="showGame('dodge')">Dodge</button>
     <button onclick="showGame('snake')">Snake</button>
     <button onclick="showGame('game2048')">2048</button>
     <button onclick="showGame('alien')">Alien Shooter</button>
+    <button onclick="showGame('music')">Music</button>
     <button onclick="showGame('leaderboard')">Leaderboard</button>
   </nav>
+
   <main>
     <section id="home" class="game" style="display:block">
       <h2>Welcome, <span id="player-name-home">Guest</span>!</h2>
@@ -121,12 +151,11 @@
       <button class="action" onclick="startSnake()">Start / Restart</button>
     </section>
 
-    <!-- HTML part stays mostly the same -->
     <section id="game2048" class="game">
-    <h2>2048</h2>
-    <div id="game2048"></div>
-    <div id="message2048" style="min-height:1.5em; color:#ef4444; font-weight:bold;"></div>
-    <button class="action" onclick="init2048()">Restart</button>
+      <h2>2048</h2>
+      <div id="game2048"></div>
+      <div id="message2048" style="min-height:1.5em; color:#ef4444; font-weight:bold;"></div>
+      <button class="action" onclick="init2048()">Restart</button>
     </section>
 
     <section id="alien" class="game">
@@ -134,6 +163,18 @@
       <canvas id="alienGame" width="400" height="450"></canvas>
       <button class="action" onclick="startAlien()">Start / Restart</button>
       <p id="scoreAlien">Score: 0</p>
+    </section>
+
+    <!-- ─── NEW MUSIC GAME SECTION ─── -->
+    <section id="music" class="game">
+      <h2>ASDF Music</h2>
+      <p class="hint">Press <strong>A S D F</strong> to play notes<br>(hold to sustain – works on keyboard & mobile tap too)</p>
+      <div class="keys">
+        <div class="key" data-key="a">A</div>
+        <div class="key" data-key="s">S</div>
+        <div class="key" data-key="d">D</div>
+        <div class="key" data-key="f">F</div>
+      </div>
     </section>
 
     <section id="leaderboard" class="game leaderboard">
@@ -156,7 +197,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 
 <script>
-// Your Firebase config
+// ─── Firebase Config ────────────────────────────────────────
 const firebaseConfig = {
   apiKey: "AIzaSyANLp5iTUBM9isYt3nRaxYt9fZ-qc-Lsts",
   authDomain: "minigamearcade-373e5.firebaseapp.com",
@@ -167,16 +208,13 @@ const firebaseConfig = {
   appId: "1:347058693088:web:41e1b5da9cbc5567aa0185",
   measurementId: "G-PMXHFHMQSZ"
 };
-
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 let currentPlayerName = 'Guest';
 const CORRECT_PASSWORD = 'bread';
 
-// ────────────────────────────────────────────────
-// PASSWORD + NAME ENTRY
-// ────────────────────────────────────────────────
+// ─── PASSWORD + NAME ENTRY ──────────────────────────────────
 document.getElementById('unlock-password').onclick = () => {
   const input = document.getElementById('password-input').value.trim();
   if (input === CORRECT_PASSWORD) {
@@ -202,9 +240,7 @@ document.getElementById('unlock-name').onclick = () => {
   }
 };
 
-// ────────────────────────────────────────────────
-// SHARED LEADERBOARD
-// ────────────────────────────────────────────────
+// ─── LEADERBOARD ────────────────────────────────────────────
 const LEADERBOARD_PATHS = {
   dodge: 'leaderboards/dodge',
   snake: 'leaderboards/snake',
@@ -265,9 +301,7 @@ Object.values(LEADERBOARD_PATHS).forEach(path => {
   });
 });
 
-// ────────────────────────────────────────────────
-// GAME SWITCHER
-// ────────────────────────────────────────────────
+// ─── GAME SWITCHER ──────────────────────────────────────────
 let dodgeRafId = null;
 let snakeTimer = null;
 let alienTimer = null;
@@ -276,6 +310,7 @@ function showGame(id) {
   document.querySelectorAll('.game').forEach(g => g.style.display = 'none');
   document.getElementById(id).style.display = 'block';
   if (id === 'leaderboard') renderAll();
+
   if (id !== 'dodge' && dodgeRafId) cancelAnimationFrame(dodgeRafId);
   if (id !== 'snake' && snakeTimer) clearInterval(snakeTimer);
   if (id !== 'alien' && alienTimer) clearInterval(alienTimer);
@@ -355,9 +390,6 @@ function sLoop() {
   snake.forEach(p => sctx.fillRect(p.x*20, p.y*20, 20, 20));
 }
 
-// ────────────────────────────────────────────────
-// 2048
-// ────────────────────────────────────────────────
 // ────────────────────────────────────────────────
 // 2048
 // ────────────────────────────────────────────────
@@ -550,14 +582,81 @@ function alienLoop() {
   });
   alienSpeed += 0.0004;
 }
-// ────────────────────────────────────────────────
-// INPUT
-// ────────────────────────────────────────────────
+// ─── MUSIC GAME LOGIC ───────────────────────────────────────
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const activeOsc = {};
+
+const notes = {
+  a: 440.00,   // A4
+  s: 493.88,   // B4
+  d: 523.25,   // C5
+  f: 587.33    // D5
+};
+
+function playNote(key) {
+  if (activeOsc[key]) return;
+  const osc = audioCtx.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.value = notes[key];
+
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.35, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.1);
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc.start();
+  activeOsc[key] = osc;
+
+  const el = document.querySelector(`.key[data-key="${key}"]`);
+  if (el) el.classList.add('active');
+}
+
+function stopNote(key) {
+  if (!activeOsc[key]) return;
+  activeOsc[key].stop();
+  delete activeOsc[key];
+
+  const el = document.querySelector(`.key[data-key="${key}"]`);
+  if (el) el.classList.remove('active');
+}
+
+// Keyboard input
+document.addEventListener('keydown', e => {
+  if (e.repeat) return;
+  const k = e.key.toLowerCase();
+  if (notes[k] && document.getElementById('music').style.display === 'block') {
+    playNote(k);
+  }
+});
+
+document.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if (notes[k] && document.getElementById('music').style.display === 'block') {
+    stopNote(k);
+  }
+});
+
+// Also support mouse/touch on the buttons
+document.querySelectorAll('.key').forEach(el => {
+  const key = el.dataset.key;
+  el.addEventListener('mousedown', () => playNote(key));
+  el.addEventListener('mouseup',   () => stopNote(key));
+  el.addEventListener('mouseleave',() => stopNote(key));
+
+  // Touch support (mobile)
+  el.addEventListener('touchstart', e => { e.preventDefault(); playNote(key); });
+  el.addEventListener('touchend',   e => { e.preventDefault(); stopNote(key); });
+});
+
+// ─── INPUT (updated to include music game keys) ─────────────
 document.addEventListener('keydown', e => {
   const key = e.key.toLowerCase();
   const visible = document.querySelector('.game:not([style*="display: none"])');
   if (!visible) return;
   const id = visible.id;
+
   if (id === 'dodge') {
     if (key==='a') player.x -= 22;
     if (key==='d') player.x += 22;
@@ -584,8 +683,8 @@ document.addEventListener('keydown', e => {
       e.preventDefault();
     }
   }
+  // Music game keys are already handled separately above
 });
-// ────────────────────────────────────────────────
-// POPCORN MULTIPLAYER LOGIC
-// ────────────────────────────────────────────────
 </script>
+</body>
+</html>
