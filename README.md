@@ -600,7 +600,7 @@ function playNote(key, duration = 0.15) {
   }
 
   const osc = audioCtx.createOscillator();
-  osc.type = 'sine';           // Try 'square' for retro game feel
+  osc.type = 'sine';  // 'square' for retro
   osc.frequency.value = notes[key];
 
   const gain = audioCtx.createGain();
@@ -619,13 +619,7 @@ function playNote(key, duration = 0.15) {
     setTimeout(() => el.classList.remove('active'), duration * 1000 + 50);
   }
 
-  // Auto-stop after duration
-  setTimeout(() => {
-    if (activeOsc[key]) {
-      activeOsc[key].stop();
-      delete activeOsc[key];
-    }
-  }, duration * 1000 + 20);
+  setTimeout(() => stopNote(key), duration * 1000);
 }
 
 function stopNote(key) {
@@ -637,73 +631,106 @@ function stopNote(key) {
   if (el) el.classList.remove('active');
 }
 
-// ─── Manual play (keyboard) ────────────────────────────────
+// ─── Manual play (always available) ─────────────────────────
 document.addEventListener('keydown', e => {
   if (e.repeat) return;
   const k = e.key.toLowerCase();
   if (notes[k] && document.getElementById('music').style.display === 'block') {
-    playNote(k, 1.2);   // longer sustain when holding
+    playNote(k, 0.3);  // short for manual
   }
 });
 
 document.addEventListener('keyup', e => {
   const k = e.key.toLowerCase();
-  if (notes[k] && document.getElementById('music').style.display === 'block') {
-    stopNote(k);
+  if (notes[k]) stopNote(k);
+});
+
+// Mouse/touch for manual
+document.querySelectorAll('.key').forEach(el => {
+  const key = el.dataset.key;
+  el.addEventListener('mousedown', () => playNote(key, 0.3));
+  el.addEventListener('mouseup', () => stopNote(key));
+  el.addEventListener('mouseleave', () => stopNote(key));
+
+  el.addEventListener('touchstart', e => { e.preventDefault(); playNote(key, 0.3); });
+  el.addEventListener('touchend', e => { e.preventDefault(); stopNote(key); });
+});
+
+// ─── Song Tutorial Mode ─────────────────────────────────────
+const marioSequence = [
+  {key: 'd', dur: 0.18},  // E
+  {key: 'd', dur: 0.18},  // E
+  {key: 'd', dur: 0.36},  // E (long)
+  {key: 'a', dur: 0.12},  // C
+  {key: 'd', dur: 0.24},  // E
+  {key: 'f', dur: 0.48},  // G (long)
+  {key: 'a', dur: 0.18},  // C
+  {key: 'd', dur: 0.18},  // E
+  {key: 'd', dur: 0.36},  // E (long)
+  {key: 'a', dur: 0.12},  // C
+  {key: 'd', dur: 0.24},  // E
+  {key: 'f', dur: 0.48}   // G (long)
+];
+
+let currentIndex = -1;
+let inTutorial = false;
+
+function highlightNext() {
+  document.querySelectorAll('.key').forEach(el => el.classList.remove('next'));
+  if (currentIndex < marioSequence.length) {
+    const nextKey = marioSequence[currentIndex].key;
+    const el = document.querySelector(`.key[data-key="${nextKey}"]`);
+    if (el) el.classList.add('next');
+    document.getElementById('music-status').textContent = currentIndex === -1 ? '' : `Press the highlighted key (${nextKey.toUpperCase()})!`;
+  } else {
+    document.getElementById('music-status').textContent = 'Well done! You played the song! 🎉';
+    document.getElementById('start-tutorial-btn').textContent = 'Restart Tutorial';
+    inTutorial = false;
+  }
+}
+
+document.getElementById('start-tutorial-btn')?.addEventListener('click', () => {
+  currentIndex = 0;
+  inTutorial = true;
+  document.getElementById('start-tutorial-btn').textContent = 'Tutorial in Progress...';
+  document.getElementById('music-status').textContent = 'Press the highlighted key!';
+  highlightNext();
+});
+
+// ─── Keydown for tutorial ───────────────────────────────────
+document.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (!inTutorial || e.repeat || document.getElementById('music').style.display !== 'block') return;
+
+  const expected = marioSequence[currentIndex]?.key;
+  if (k === expected) {
+    playNote(k, marioSequence[currentIndex].dur);
+    currentIndex++;
+    highlightNext();
+  } else {
+    // Wrong key: short error beep (using 'a' as low note)
+    playNote('a', 0.1);
+    document.getElementById('music-status').textContent = 'Oops! Wrong key. Try again.';
+    setTimeout(() => {
+      document.getElementById('music-status').textContent = `Press ${expected.toUpperCase()}!`;
+    }, 800);
   }
 });
 
-// Mouse / touch support
-document.querySelectorAll('.key').forEach(el => {
-  const key = el.dataset.key;
-  const play = () => playNote(key, 1.0);
-  const stop = () => stopNote(key);
-
-  el.addEventListener('mousedown', play);
-  el.addEventListener('mouseup', stop);
-  el.addEventListener('mouseleave', stop);
-
-  el.addEventListener('touchstart', e => { e.preventDefault(); play(); });
-  el.addEventListener('touchend',   e => { e.preventDefault(); stop(); });
-});
-
-// ─── Auto-play famous song (Super Mario Bros intro – adapted) ─────
-const marioMelody = [
-  {key:'d', dur:0.18}, {key:'d', dur:0.18}, {key:'d', dur:0.36},    // E E E
-  {key:'a', dur:0.12}, {key:'d', dur:0.24},                         // C E
-  {key:'f', dur:0.48},                                              // G (long)
-  {key:'a', dur:0.18}, {key:'d', dur:0.18}, {key:'d', dur:0.36},    // C E E
-  {key:'a', dur:0.12}, {key:'d', dur:0.24},                         // C E
-  {key:'f', dur:0.48},                                              // G (long)
-  // ... you can extend it more if you want
-];
-
-let isPlayingSong = false;
-
-document.getElementById('play-mario-btn')?.addEventListener('click', () => {
-  if (isPlayingSong) return;
-  isPlayingSong = true;
-  document.getElementById('play-mario-btn').disabled = true;
-  document.getElementById('play-mario-btn').textContent = "Playing... 🎵";
-
-  let time = audioCtx.currentTime;
-  const tempo = 1.0;  // speed multiplier (lower = faster)
-
-  marioMelody.forEach(note => {
-    setTimeout(() => {
-      playNote(note.key, note.dur * tempo);
-    }, (time - audioCtx.currentTime) * 1000);
-
-    time += note.dur * tempo;
-  });
-
-  setTimeout(() => {
-    isPlayingSong = false;
-    document.getElementById('play-mario-btn').disabled = false;
-    document.getElementById('play-mario-btn').textContent = "Play Super Mario Theme Intro";
-  }, (time - audioCtx.currentTime + 0.5) * 1000);
-});
-
+// Reset tutorial when switching games
+const originalShowGame = showGame;
+showGame = function(id) {
+  originalShowGame(id);
+  if (id !== 'music') {
+    inTutorial = false;
+    currentIndex = -1;
+    document.querySelectorAll('.key').forEach(el => el.classList.remove('next'));
+    if (document.getElementById('start-tutorial-btn')) {
+      document.getElementById('start-tutorial-btn').textContent = 'Start Super Mario Tutorial';
+    }
+    document.getElementById('music-status').textContent = '';
+  }
+};
 // ─── INPUT (updated to include music game keys) ─────────────
 document.addEventListener('keydown', e => {
   const key = e.key.toLowerCase();
