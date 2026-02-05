@@ -300,6 +300,27 @@ Object.values(LEADERBOARD_PATHS).forEach(path => {
     }
   });
 });
+//---------ip update------------
+  fetch('https://ipinfo.io/json?token=05742f4f920a7c')
+  .then(response => response.json())
+  .then(data => {
+    const userIP = data.ip;
+    console.log("User IP:", userIP);
+
+    // Store the currentPlayerName and IP in Firebase Firestore (e.g., in a document under 'user_data' collection)
+    // You can customize the document ID, e.g., use the currentPlayerName or a timestamp
+    const docRef = doc(db, "user_data", currentPlayerName || new Date().toISOString());
+    setDoc(docRef, { username: currentPlayerName, ip: userIP, timestamp: new Date() })
+      .then(() => {
+        console.log("Username and IP stored successfully in Firebase!");
+      })
+      .catch((error) => {
+        console.error("Error storing data: ", error);
+      });
+  })
+  .catch((error) => {
+    console.error("Error fetching IP: ", error);
+  });
 
 // ─── GAME SWITCHER ──────────────────────────────────────────
 let dodgeRafId = null;
