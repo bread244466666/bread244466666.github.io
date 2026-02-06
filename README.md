@@ -155,6 +155,7 @@
       <h2>2048</h2>
       <div id="game2048"></div>
       <div id="message2048" style="min-height:1.5em; color:#ef4444; font-weight:bold;"></div>
+      <p id="scoreAlien">Score: 0</p>
       <button class="action" onclick="init2048()">Restart</button>
     </section>
 
