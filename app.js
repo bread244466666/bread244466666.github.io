@@ -33,9 +33,14 @@ scene.add(redLight);
 // 2. 武器庫物理與彈道參數配置
 // =========================================================================
 const WEAPON_CONFIGS = {
-    RIFLE: { maxAmmo: 30, aimFov: 35, color: 0x00ffcc, barrelLength: 0.5, barrelRadius: 0.02, fireRate: 130, damage: 20, recoil: 0.03, spread: 0.02, pellets: 1 },
-    SHOTGUN: { maxAmmo: 8, aimFov: 45, color: 0xff00ff, barrelLength: 0.35, barrelRadius: 0.035, fireRate: 800, damage: 5, recoil: 0.11, spread: 0.09, pellets: 6 },
-    SNIPER: { maxAmmo: 5, aimFov: 12, color: 0xffff00, barrelLength: 0.8, barrelRadius: 0.015, fireRate: 1200, damage: 75, recoil: 0.26, spread: 0.001, pellets: 1 }
+    // 步槍需要 6-7 發才能擊殺，考驗持續追蹤跟槍（Tracking）的能力
+    RIFLE: { maxAmmo: 30, aimFov: 35, color: 0x00ffcc, barrelLength: 0.5, barrelRadius: 0.02, fireRate: 140, damage: 15, recoil: 0.035, spread: 0.02, pellets: 1 },
+    
+    // 散彈槍全中可打殘對手（總共 72 點傷害），射速提升，適合配合 AABB 滑牆突襲
+    SHOTGUN: { maxAmmo: 8, aimFov: 45, color: 0xff00ff, barrelLength: 0.35, barrelRadius: 0.035, fireRate: 650, damage: 9, recoil: 0.10, spread: 0.08, pellets: 8 },
+    
+    // 狙擊槍一槍 85 點，雖然不能秒殺，但能重創對手，逼迫對方退回掩體打藥或等重生
+    SNIPER: { maxAmmo: 5, aimFov: 14, color: 0xffff00, barrelLength: 0.8, barrelRadius: 0.015, fireRate: 1100, damage: 85, recoil: 0.22, spread: 0.001, pellets: 1 }
 };
 
 let currentWeaponType = "RIFLE"; 
