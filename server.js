@@ -12,12 +12,10 @@ const io = new Server(server, {
 const path = require('path');
 
 // =========================================================================
-// 【重要修正】啟用靜態檔案路由，解決 "Cannot GET /" 錯誤
+// 啟用靜態檔案路由，解決 "Cannot GET /" 錯誤
 // =========================================================================
-// 讓 Express 自動伺服同目錄下的前端檔案 (index.html, app.js 等)
 app.use(express.static(__dirname));
 
-// 強制將根路徑 (/) 指向 index.html
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -28,7 +26,6 @@ app.get('/', (req, res) => {
 const rooms = {}; 
 const MAP_BOUNDS = 58; 
 
-// 預設地圖障礙物 (AABB 碰撞盒)
 const DEFAULT_OBSTACLES = [
     { x: 0, y: 2, z: -15, w: 12, h: 4, d: 4, color: 0x00ffcc },
     { x: -18, y: 3, z: 10, w: 6, h: 6, d: 6, color: 0xff00ff },
@@ -63,7 +60,6 @@ io.on('connection', (socket) => {
         const room = rooms[cleanedRoomId];
         currentRoomId = cleanedRoomId;
 
-        // 分配隊伍 (平衡人數)
         let alphaCount = 0; let omegaCount = 0;
         for (let pId in room.players) {
             if (room.players[pId].team === "ALPHA") alphaCount++;
@@ -71,7 +67,6 @@ io.on('connection', (socket) => {
         }
         const assignedTeam = (alphaCount <= omegaCount) ? "ALPHA" : "OMEGA";
 
-        // 初始化玩家後端數據
         room.players[socket.id] = {
             id: socket.id,
             name: name || "Unknown Agent",
@@ -83,13 +78,12 @@ io.on('connection', (socket) => {
             ry: 0,
             hp: 100,
             isDeployed: false,
-            lastHurtTime: 0, // 用於脫戰自動回血計時
+            lastHurtTime: 0, 
             killStreak: 0
         };
 
         socket.join(cleanedRoomId);
         
-        // 發送初始化資料給剛加入的玩家
         socket.emit('init', {
             id: socket.id,
             roomId: cleanedRoomId,
@@ -101,7 +95,7 @@ io.on('connection', (socket) => {
         });
     });
 
-    // 3. 選擇武器並部署上場
+    // 3. 選擇武器並部署
     socket.on('selectWeaponAndDeploy', (data) => {
         if (!currentRoomId || !rooms[currentRoomId]) return;
         const room = rooms[currentRoomId];
@@ -113,42 +107,39 @@ io.on('connection', (socket) => {
         p.killStreak = 0;
         p.lastHurtTime = 0;
         
-        // 根據隊伍分配出生點
         p.x = (p.team === "ALPHA" ? -25 : 25) + (Math.random() - 0.5) * 4;
         p.y = 1.6;
         p.z = (Math.random() - 0.5) * 10;
         p.ry = p.team === "ALPHA" ? -Math.PI / 2 : Math.PI / 2;
         p.isDeployed = true;
 
-        // 全房間廣播重生
         io.to(currentRoomId).emit('playerRespawn', { id: socket.id, info: p });
     });
 
-    // 4. 玩家移動同步 (包含邊界限制)
+    // 4. 位置同步
     socket.on('playerUpdate', (data) => {
         if (!currentRoomId || !rooms[currentRoomId]) return;
         const room = rooms[currentRoomId];
         const p = room.players[socket.id];
         if (!p || !p.isDeployed) return;
 
-        // 伺服器端邊界阻擋
         p.x = Math.max(-MAP_BOUNDS, Math.min(MAP_BOUNDS, data.x));
         p.y = data.y;
         p.z = Math.max(-MAP_BOUNDS, Math.min(MAP_BOUNDS, data.z));
         p.ry = data.ry;
 
-        // 廣播給房間內其他玩家，並回傳 Ack 序號
         socket.to(currentRoomId).emit('playerMoved', { id: socket.id, info: p });
         socket.emit('serverAck', { seq: data.seq, x: p.x, z: p.z });
     });
 
-    // 5. 開槍視覺同步
+    // 5. 【老功能補回】開槍視覺全域同步
     socket.on('playerFire', () => {
         if (!currentRoomId) return;
+        // 向房間內其他玩家發送開槍通知，供遠端模型渲染槍口火焰
         socket.to(currentRoomId).emit('remoteFire', socket.id);
     });
 
-    // 6. 命中判定與傷害計算
+    // 6. 命中與傷害判定
     socket.on('playerShot', (targetId) => {
         if (!currentRoomId || !rooms[currentRoomId]) return;
         const room = rooms[currentRoomId];
@@ -157,15 +148,13 @@ io.on('connection', (socket) => {
 
         if (!attacker || !target || !target.isDeployed || target.hp <= 0 || attacker.team === target.team) return;
 
-        // 計算槍枝傷害數值
         let damage = 20; 
-        if (attacker.weapon === "SHOTGUN") damage = 12; // 單發彈丸傷害
-        else if (attacker.weapon === "SNIPER") damage = 100; // 狙擊槍一槍致命
+        if (attacker.weapon === "SHOTGUN") damage = 12; 
+        else if (attacker.weapon === "SNIPER") damage = 100; 
 
         target.hp = Math.max(0, target.hp - damage);
-        target.lastHurtTime = Date.now(); // 核心：刷新受傷時間，重新計算 10 秒脫戰
+        target.lastHurtTime = Date.now(); 
 
-        // 同步扣血狀態
         io.to(currentRoomId).emit('playerHurt', {
             id: targetId,
             targetName: target.name,
@@ -174,34 +163,29 @@ io.on('connection', (socket) => {
             attackerZ: attacker.z
         });
 
-        // 擊殺邏輯觸發
         if (target.hp <= 0) {
             target.isDeployed = false;
             attacker.killStreak++;
 
-            // 增加隊伍分數
             if (attacker.team === "ALPHA") room.scores.ALPHA += 1;
             else room.scores.OMEGA += 1;
             io.to(currentRoomId).emit('scoreUpdate', room.scores);
 
-            // 廣播擊殺通知
             io.to(currentRoomId).emit('killFeed', { attackerName: attacker.name, targetName: target.name });
             io.to(currentRoomId).emit('playerDead', { id: targetId });
 
-            // 連殺獎勵機制 (削弱版大招)
+            // 連連殺Buff
             if (attacker.killStreak === 2) {
-                // 2連殺：獲得移動速度加成
                 socket.emit('streakBuff', { speedMultiplier: 1.15 });
             } else if (attacker.killStreak === 3) {
-                // 3連殺：為全隊開啟 5 秒透視雷達
                 io.to(currentRoomId).emit('radarScan', { team: attacker.team });
                 setTimeout(() => {
                     io.to(currentRoomId).emit('radarScanEnd');
                 }, 5000);
-                attacker.killStreak = 0; // 重設連殺數
+                attacker.killStreak = 0; 
             }
 
-            // 機率在中央生成黃金狙擊槍空投
+            // 黃金狙擊槍空投生成
             if (Math.random() < 0.4 && !room.weaponDropped) {
                 room.weaponDropped = true;
                 room.dropX = (Math.random() - 0.5) * 15;
@@ -211,7 +195,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 7. 空投武器拾取
+    // 7. 拾取武器
     socket.on('pickupWeapon', () => {
         if (!currentRoomId || !rooms[currentRoomId]) return;
         const room = rooms[currentRoomId];
@@ -221,13 +205,12 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 8. 斷線處理
+    // 8. 斷線
     socket.on('disconnect', () => {
         if (currentRoomId && rooms[currentRoomId]) {
             delete rooms[currentRoomId].players[socket.id];
             io.to(currentRoomId).emit('playerLeft', socket.id);
             
-            // 如果房間沒人了，自動回收記憶體
             if (Object.keys(rooms[currentRoomId].players).length === 0) {
                 clearInterval(rooms[currentRoomId].timerInterval);
                 delete rooms[currentRoomId];
@@ -244,7 +227,7 @@ function createRoomInstance(roomId) {
         players: {},
         obstacles: [...DEFAULT_OBSTACLES],
         scores: { ALPHA: 0, OMEGA: 0 },
-        timeLeft: 180, // 每局 3 分鐘
+        timeLeft: 180, 
         weaponDropped: false,
         dropX: 0, dropZ: 0,
         timerInterval: null
@@ -257,7 +240,6 @@ function startRoomTimer(roomId) {
     room.timerInterval = setInterval(() => {
         if (!rooms[roomId]) return;
 
-        // 1. 遊戲倒數計時
         room.timeLeft--;
         io.to(roomId).emit('timeUpdate', room.timeLeft);
 
@@ -269,7 +251,6 @@ function startRoomTimer(roomId) {
 
             io.to(roomId).emit('matchOver', { winner: winner, scores: room.scores });
 
-            // 8 秒後自動重設戰局
             setTimeout(() => {
                 if (rooms[roomId]) {
                     rooms[roomId].scores = { ALPHA: 0, OMEGA: 0 };
@@ -286,18 +267,14 @@ function startRoomTimer(roomId) {
             return;
         }
 
-        // =========================================================================
-        // 【核心機制：脫離戰鬥 10 秒後自動回血 (新平衡：每秒 5 點)】
-        // =========================================================================
+        // 10 秒脫戰自動回血（每秒 5 點）
         const now = Date.now();
         for (let pId in room.players) {
             const p = room.players[pId];
             if (p.isDeployed && p.hp > 0 && p.hp < 100) {
-                // 檢查條件：距離上次受傷是否超過 10000 毫秒 (10秒)
                 if (!p.lastHurtTime || (now - p.lastHurtTime > 10000)) {
-                    p.hp = Math.min(100, p.hp + 5); // 每秒回復 5 點
+                    p.hp = Math.min(100, p.hp + 5); 
                     
-                    // 同步生命值給該房間的所有人
                     io.to(roomId).emit('playerHurt', { 
                         id: pId, 
                         targetName: p.name, 
@@ -308,7 +285,7 @@ function startRoomTimer(roomId) {
                 }
             }
         }
-    }, 1000); // 每 1 秒檢查並執行一次
+    }, 1000); 
 }
 
 // =========================================================================
