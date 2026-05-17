@@ -1,3 +1,4 @@
+const killParticles = []; // 存放所有正在飛散的擊殺粒子
 // =========================================================================
 // 1. 3D 場景與電影級光影初始化
 // =========================================================================
@@ -7,6 +8,9 @@ scene.fog = new THREE.FogExp2(0x040712, 0.035);
 
 let defaultFOV = 75; 
 let aimFOV = 35; 
+let mouseXSpeed = 0;
+let mouseYSpeed = 0;
+let bobTime = 0; // 控制呼吸與走路晃動的時間軸
 const camera = new THREE.PerspectiveCamera(defaultFOV, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -297,7 +301,18 @@ socket.on('playerDead', (data) => {
         document.exitPointerLock(); isLocked = false;
         speedModifier = 1.0; isRadarXrayActive = false;
         if (weaponOverlay) weaponOverlay.style.display = 'flex';
-    } else { completelyRemovePlayer(data.id); }
+    } else { 
+        // ==== 【新增】在遠端玩家死亡的地方觸發霓虹爆散 ====
+        if (remotePlayers[data.id]) {
+            const deadPos = remotePlayers[data.id].position.clone();
+            // 這裡抓取原本設定的隊伍顏色（你可以根據具體邏輯傳入，此處預設紅/藍）
+            const isAlpha = remotePlayers[data.id].children.some(c => c.material && c.material.emissive && c.material.emissive.b > 0);
+            const effectColor = isAlpha ? 0x0088ff : 0xff3300;
+            
+            spawnKillEffect(deadPos, effectColor);
+        }
+        completelyRemovePlayer(data.id); 
+    }
 });
 
 socket.on('playerRespawn', (data) => {
@@ -357,6 +372,10 @@ document.addEventListener('mousemove', (event) => {
     camera.rotation.y -= event.movementX * sensitivity; 
     camera.rotation.x -= event.movementY * sensitivity;
     camera.rotation.x = Math.max(-Math.PI / 2.3, Math.min(Math.PI / 2.3, camera.rotation.x));
+
+    // ==== 【新增】記錄滑鼠速度用於槍枝擺動 ====
+    mouseXSpeed = event.movementX * 0.0005;
+    mouseYSpeed = event.movementY * 0.0005;
 });
 camera.rotation.order = "YXZ";
 
@@ -536,11 +555,51 @@ function animate() {
     handleMovement(); 
     
     // 渲染空投自轉特效
-    if (dropWeaponMesh) dropWeaponMesh.rotation.y += 0.03;
-
+    // =========================================================================
+    // 【動態優化】呼吸、走動晃動 (Bobbing) 與 武器擺動 (Sway)
+    // =========================================================================
     targetWeaponPos.copy(isAiming ? aimPosition : hipfirePosition); 
-    currentWeaponPos.lerp(targetWeaponPos, 0.15);
-    if (barrel) { barrel.position.copy(currentWeaponPos); barrel.rotation.z = weaponRotationZ; }
+
+    // 判斷是否在移動
+    const isMoving = keysPressed.w || keysPressed.s || keysPressed.a || keysPressed.d;
+    
+    if (isMoving && isGrounded) {
+        // 走路時加快晃動頻率，滑鏟時速度變快晃動也變劇烈
+        const bobSpeed = isSliding ? 0.25 : 0.12;
+        const bobAmountX = isSliding ? 0.04 : 0.015;
+        const bobAmountY = isSliding ? 0.02 : 0.01;
+        
+        bobTime += bobSpeed;
+        // 使用正弦與餘弦做出經典的 FPS 走動上下震盪
+        targetWeaponPos.x += Math.cos(bobTime) * bobAmountX;
+        targetWeaponPos.y += Math.sin(bobTime * 2) * bobAmountY;
+    } else {
+        // 靜止時的微弱呼吸效果
+        bobTime += 0.02;
+        targetWeaponPos.y += Math.sin(bobTime) * 0.002;
+    }
+
+    // 加上滑鼠甩槍時的動態擺動 (Sway) 偏移量
+    if (!isAiming) {
+        targetWeaponPos.x -= mouseXSpeed;
+        targetWeaponPos.y += mouseYSpeed;
+    }
+
+    // 平滑插值 (Lerp) 讓槍枝過渡極度流暢
+    currentWeaponPos.lerp(targetWeaponPos, 0.2);
+    
+    // 讓滑鼠動態擺動速度慢慢衰減歸零
+    mouseXSpeed *= 0.85;
+    mouseYSpeed *= 0.85;
+
+    if (barrel) { 
+        barrel.position.copy(currentWeaponPos); 
+        barrel.rotation.z = weaponRotationZ; 
+        
+        // 甩槍時槍身產生微幅傾斜扭轉 (Sway Rotation)
+        barrel.rotation.y = (Math.PI / 2) - mouseXSpeed * 1.5;
+        barrel.rotation.x = mouseYSpeed * 1.5;
+    }
     
     if (isLocked) { camera.rotation.x += recoilPitch; camera.rotation.y += recoilYaw; recoilPitch *= 0.85; recoilYaw *= 0.85; }
     if (screenShakeIntensity > 0.001) { 
@@ -576,6 +635,36 @@ function animate() {
     }
     renderer.render(scene, camera);
 }
+function spawnKillEffect(position, teamColor) {
+    // 每次擊殺噴發 40 顆科技感霓虹粒子
+    const particleCount = 40;
+    const particleGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
+    const particleMat = new THREE.MeshBasicMaterial({
+        color: teamColor,
+        transparent: true,
+        opacity: 1.0
+    });
 
+    for (let i = 0; i < particleCount; i++) {
+        const mesh = new THREE.Mesh(particleGeo, particleMat);
+        // 從敵人的重心位置出發
+        mesh.position.copy(position);
+        
+        // 隨機炸裂速度方向 (X, Y, Z)
+        const velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.3,
+            Math.random() * 0.2 + 0.1, // 給予一個向上的噴發力
+            (Math.random() - 0.5) * 0.3
+        );
+
+        scene.add(mesh);
+        killParticles.push({
+            mesh: mesh,
+            velocity: velocity,
+            life: 1.0, // 粒子壽命 (1.0 降到 0.0 銷毀)
+            decay: Math.random() * 0.02 + 0.015 // 隨機消散速度
+        });
+    }
+}
 window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
 animate();
