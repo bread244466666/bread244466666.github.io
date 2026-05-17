@@ -89,6 +89,39 @@
         /* 🏁 戰局結算蓋板 UI */
         #victory-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(2,4,10,0.95); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; font-family: monospace; color: white; text-align: center; }
         #victory-title { font-size: 48px; font-weight: bold; margin-bottom: 20px; letter-spacing: 4px; }
+        #crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 10px;
+    height: 10px;
+    transform: translate(-50%, -50%);
+    pointer-events: none; /* 讓滑鼠點擊穿透，不影響視角控制 */
+    z-index: 999;        /* 確保準星蓋在 3D 畫面最上方 */
+}
+
+/* 繪製十字準星的橫線與直線 */
+#crosshair::before, #crosshair::after {
+    content: '';
+    position: absolute;
+    background: #00ff00; /* 螢光綠準星，最顯眼 */
+}
+
+/* 橫線 */
+#crosshair::before {
+    top: 4px;
+    left: -5px;
+    width: 20px;
+    height: 2px;
+}
+
+/* 直線 */
+#crosshair::after {
+    top: -5px;
+    left: 4px;
+    width: 2px;
+    height: 20px;
+}
     </style>
 </head>
 <body>
@@ -118,6 +151,7 @@
 
     <div id="radar-container">
         <canvas id="radar-canvas" width="140" height="140"></canvas>
+        <div id="crosshair"></div>
     </div>
 
     <div id="hud">
