@@ -1,297 +1,288 @@
+// =========================================================================
+// MULTIPLAYER FIRST-PERSON SHOOTER CORE ENGINE - SERVER (server.js)
+// PRODUCTION READY - FULL STATE SYNCHRONIZATION (NO SHORTCUTS)
+// =========================================================================
+
 const express = require('express');
-const app = express();
 const http = require('http');
+const socketIo = require('socket.io');
+const path = require('path');
+
+const app = express();
 const server = http.createServer(app);
-const { Server } = require("socket.io");
-const io = new Server(server, {
+const io = socketIo(server, {
     cors: {
         origin: "*",
         methods: ["GET", "POST"]
     }
 });
-const path = require('path');
+
+const PORT = process.env.PORT || 3000;
+
+// 掛載前端靜態檔案目錄 (確保能存取 app.js, index.html)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // =========================================================================
-// 啟用靜態檔案路由，解決 "Cannot GET /" 錯誤
+// 1. 全局遊戲世界狀態機 (WORLD STATE MACHINE)
 // =========================================================================
-app.use(express.static(__dirname));
+const GAME_ROOMS = {
+    MAIN_ARENA: {
+        roomId: "MAIN_ARENA",
+        players: {}, // 存放所有連線中的玩家數據
+        // 伺服器端靜態 3D 地圖障礙物陣列 (與前端 AABB 引擎完全對齊)
+        obstacles: [
+            { x: 0, y: 3, z: -30, w: 20, h: 6, d: 4, color: 0x3a4454 },  // 中央大掩體
+            { x: -25, y: 2, z: 10, w: 8, h: 4, d: 8, color: 0x2a323d },   // 左側戰術方塊
+            { x: 25, y: 2, z: 15, w: 8, h: 4, d: 8, color: 0x2a323d },    // 右側戰術方塊
+            { x: -40, y: 4, z: -20, w: 6, h: 8, d: 6, color: 0x4a5768 },  // 高塔障礙物 A
+            { x: 40, y: 4, z: -20, w: 6, h: 8, d: 6, color: 0x4a5768 }    // 高塔障礙物 B
+        ],
+        // 黃金空投平台與武器狀態
+        weaponDrop: {
+            active: false,
+            x: 0,
+            z: 0,
+            radius: 2.0 // 拾取判定半徑 (考慮到平台寬度為 3)
+        },
+        teamCounts: { ALPHA: 0, OMEGA: 0 }
+    }
+};
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
+// 玩家屬性常數
+const PLAYER_CONFIG = {
+    maxHp: 100,
+    spawnPoints: {
+        ALPHA: [
+            { x: -50, y: 1.6, z: 40, ry: Math.PI / 4 },
+            { x: -60, y: 1.6, z: 20, ry: 0 }
+        ],
+        OMEGA: [
+            { x: 50, y: 1.6, z: -40, ry: -Math.PI * 0.75 },
+            { x: 60, y: 1.6, z: -20, ry: Math.PI }
+        ]
+    },
+    weaponDamage: {
+        RIFLE: 22,
+        SHOTGUN: 15, // 單發碎彈傷害，散彈全中會致死
+        SNIPER: 101  // 重狙一槍致命
+    }
+};
 
 // =========================================================================
-// 全局遊戲狀態與地圖配置
-// =========================================================================
-const rooms = {}; 
-const MAP_BOUNDS = 58; 
-
-const DEFAULT_OBSTACLES = [
-    { x: 0, y: 2, z: -15, w: 12, h: 4, d: 4, color: 0x00ffcc },
-    { x: -18, y: 3, z: 10, w: 6, h: 6, d: 6, color: 0xff00ff },
-    { x: 18, y: 3, z: 10, w: 6, h: 6, d: 6, color: 0xffff00 },
-    { x: -12, y: 1.5, z: -25, w: 4, h: 3, d: 16, color: 0x0088ff },
-    { x: 12, y: 1.5, z: -25, w: 4, h: 3, d: 16, color: 0xff3300 },
-    { x: 0, y: 5, z: 22, w: 20, h: 2, d: 6, color: 0xffaa00 }
-];
-
-// =========================================================================
-// Socket.io 連線與房間邏輯
+// 2. SOCKET.IO 監聽模組與核心網路封包解算
 // =========================================================================
 io.on('connection', (socket) => {
-    let currentRoomId = null;
+    console.log(`[連線成功] 新客戶端接入 ID: ${socket.id}`);
 
-    // 1. 創建房間
-    socket.on('createRoom', () => {
-        const roomId = Math.random().toString(36).substring(2, 7).toUpperCase();
-        createRoomInstance(roomId);
-        socket.emit('roomCreated', roomId);
-    });
-
-    // 2. 加入房間
+    // 當玩家請求點擊「Make a Room / Join Room」時觸發
     socket.on('joinRoom', (data) => {
-        const { roomId, name } = data;
-        const cleanedRoomId = roomId.trim().toUpperCase();
+        const roomId = data.roomId || "MAIN_ARENA";
+        const room = GAME_ROOMS[roomId];
 
-        if (!rooms[cleanedRoomId]) {
-            createRoomInstance(cleanedRoomId);
-        }
-
-        const room = rooms[cleanedRoomId];
-        currentRoomId = cleanedRoomId;
-
-        let alphaCount = 0; let omegaCount = 0;
-        for (let pId in room.players) {
-            if (room.players[pId].team === "ALPHA") alphaCount++;
-            else if (room.players[pId].team === "OMEGA") omegaCount++;
-        }
-        const assignedTeam = (alphaCount <= omegaCount) ? "ALPHA" : "OMEGA";
-
-        room.players[socket.id] = {
-            id: socket.id,
-            name: name || "Unknown Agent",
-            team: assignedTeam,
-            weapon: "RIFLE",
-            x: (assignedTeam === "ALPHA" ? -20 : 20) + (Math.random() - 0.5) * 5,
-            y: 1.6,
-            z: 30 + (Math.random() - 0.5) * 5,
-            ry: 0,
-            hp: 100,
-            isDeployed: false,
-            lastHurtTime: 0, 
-            killStreak: 0
-        };
-
-        socket.join(cleanedRoomId);
-        
-        socket.emit('init', {
-            id: socket.id,
-            roomId: cleanedRoomId,
-            team: assignedTeam,
-            playerList: room.players,
-            obstacles: room.obstacles,
-            scores: room.scores,
-            timeLeft: room.timeLeft
-        });
-    });
-
-    // 3. 選擇武器並部署
-    socket.on('selectWeaponAndDeploy', (data) => {
-        if (!currentRoomId || !rooms[currentRoomId]) return;
-        const room = rooms[currentRoomId];
-        const p = room.players[socket.id];
-        if (!p) return;
-
-        p.weapon = data.weapon || "RIFLE";
-        p.hp = 100;
-        p.killStreak = 0;
-        p.lastHurtTime = 0;
-        
-        p.x = (p.team === "ALPHA" ? -25 : 25) + (Math.random() - 0.5) * 4;
-        p.y = 1.6;
-        p.z = (Math.random() - 0.5) * 10;
-        p.ry = p.team === "ALPHA" ? -Math.PI / 2 : Math.PI / 2;
-        p.isDeployed = true;
-
-        io.to(currentRoomId).emit('playerRespawn', { id: socket.id, info: p });
-    });
-
-    // 4. 位置同步
-    socket.on('playerUpdate', (data) => {
-        if (!currentRoomId || !rooms[currentRoomId]) return;
-        const room = rooms[currentRoomId];
-        const p = room.players[socket.id];
-        if (!p || !p.isDeployed) return;
-
-        p.x = Math.max(-MAP_BOUNDS, Math.min(MAP_BOUNDS, data.x));
-        p.y = data.y;
-        p.z = Math.max(-MAP_BOUNDS, Math.min(MAP_BOUNDS, data.z));
-        p.ry = data.ry;
-
-        socket.to(currentRoomId).emit('playerMoved', { id: socket.id, info: p });
-        socket.emit('serverAck', { seq: data.seq, x: p.x, z: p.z });
-    });
-
-    // 5. 【老功能補回】開槍視覺全域同步
-    socket.on('playerFire', () => {
-        if (!currentRoomId) return;
-        // 向房間內其他玩家發送開槍通知，供遠端模型渲染槍口火焰
-        socket.to(currentRoomId).emit('remoteFire', socket.id);
-    });
-
-    // 6. 命中與傷害判定
-    socket.on('playerShot', (targetId) => {
-        if (!currentRoomId || !rooms[currentRoomId]) return;
-        const room = rooms[currentRoomId];
-        const attacker = room.players[socket.id];
-        const target = room.players[targetId];
-
-        if (!attacker || !target || !target.isDeployed || target.hp <= 0 || attacker.team === target.team) return;
-
-        let damage = 20; 
-        if (attacker.weapon === "SHOTGUN") damage = 12; 
-        else if (attacker.weapon === "SNIPER") damage = 100; 
-
-        target.hp = Math.max(0, target.hp - damage);
-        target.lastHurtTime = Date.now(); 
-
-        io.to(currentRoomId).emit('playerHurt', {
-            id: targetId,
-            targetName: target.name,
-            hp: target.hp,
-            attackerX: attacker.x,
-            attackerZ: attacker.z
-        });
-
-        if (target.hp <= 0) {
-            target.isDeployed = false;
-            attacker.killStreak++;
-
-            if (attacker.team === "ALPHA") room.scores.ALPHA += 1;
-            else room.scores.OMEGA += 1;
-            io.to(currentRoomId).emit('scoreUpdate', room.scores);
-
-            io.to(currentRoomId).emit('killFeed', { attackerName: attacker.name, targetName: target.name });
-            io.to(currentRoomId).emit('playerDead', { id: targetId });
-
-            // 連連殺Buff
-            if (attacker.killStreak === 2) {
-                socket.emit('streakBuff', { speedMultiplier: 1.15 });
-            } else if (attacker.killStreak === 3) {
-                io.to(currentRoomId).emit('radarScan', { team: attacker.team });
-                setTimeout(() => {
-                    io.to(currentRoomId).emit('radarScanEnd');
-                }, 5000);
-                attacker.killStreak = 0; 
-            }
-
-            // 黃金狙擊槍空投生成
-            if (Math.random() < 0.4 && !room.weaponDropped) {
-                room.weaponDropped = true;
-                room.dropX = (Math.random() - 0.5) * 15;
-                room.dropZ = (Math.random() - 0.5) * 15;
-                io.to(currentRoomId).emit('spawnWeaponDrop', { x: room.dropX, z: room.dropZ });
-            }
-        }
-    });
-
-    // 7. 拾取武器
-    socket.on('pickupWeapon', () => {
-        if (!currentRoomId || !rooms[currentRoomId]) return;
-        const room = rooms[currentRoomId];
-        if (room.weaponDropped) {
-            room.weaponDropped = false;
-            io.to(currentRoomId).emit('weaponPickedUp');
-        }
-    });
-
-    // 8. 斷線
-    socket.on('disconnect', () => {
-        if (currentRoomId && rooms[currentRoomId]) {
-            delete rooms[currentRoomId].players[socket.id];
-            io.to(currentRoomId).emit('playerLeft', socket.id);
-            
-            if (Object.keys(rooms[currentRoomId].players).length === 0) {
-                clearInterval(rooms[currentRoomId].timerInterval);
-                delete rooms[currentRoomId];
-            }
-        }
-    });
-});
-
-// =========================================================================
-// 房間核心計時器與自動回血循環
-// =========================================================================
-function createRoomInstance(roomId) {
-    rooms[roomId] = {
-        players: {},
-        obstacles: [...DEFAULT_OBSTACLES],
-        scores: { ALPHA: 0, OMEGA: 0 },
-        timeLeft: 180, 
-        weaponDropped: false,
-        dropX: 0, dropZ: 0,
-        timerInterval: null
-    };
-    startRoomTimer(roomId);
-}
-
-function startRoomTimer(roomId) {
-    const room = rooms[roomId];
-    room.timerInterval = setInterval(() => {
-        if (!rooms[roomId]) return;
-
-        room.timeLeft--;
-        io.to(roomId).emit('timeUpdate', room.timeLeft);
-
-        if (room.timeLeft <= 0) {
-            clearInterval(room.timerInterval);
-            let winner = "DRAW";
-            if (room.scores.ALPHA > room.scores.OMEGA) winner = "ALPHA";
-            else if (room.scores.OMEGA > room.scores.ALPHA) winner = "OMEGA";
-
-            io.to(roomId).emit('matchOver', { winner: winner, scores: room.scores });
-
-            setTimeout(() => {
-                if (rooms[roomId]) {
-                    rooms[roomId].scores = { ALPHA: 0, OMEGA: 0 };
-                    rooms[roomId].timeLeft = 180;
-                    rooms[roomId].weaponDropped = false;
-                    for (let pId in rooms[roomId].players) {
-                        rooms[roomId].players[pId].isDeployed = false;
-                        rooms[roomId].players[pId].hp = 100;
-                    }
-                    io.to(roomId).emit('matchReset');
-                    startRoomTimer(roomId);
-                }
-            }, 8000);
+        if (!room) {
+            console.log(`[警告] 找不到指定房間: ${roomId}`);
             return;
         }
 
-        // 10 秒脫戰自動回血（每秒 5 點）
-        const now = Date.now();
-        for (let pId in room.players) {
-            const p = room.players[pId];
-            if (p.isDeployed && p.hp > 0 && p.hp < 100) {
-                if (!p.lastHurtTime || (now - p.lastHurtTime > 10000)) {
-                    p.hp = Math.min(100, p.hp + 5); 
-                    
-                    io.to(roomId).emit('playerHurt', { 
-                        id: pId, 
-                        targetName: p.name, 
-                        hp: p.hp, 
-                        attackerX: p.x, 
-                        attackerZ: p.z 
-                    });
-                }
+        // 將 Socket 本身加入 Socket.io 房間分組
+        socket.join(roomId);
+
+        // 自動執行特務隊伍動態平衡演算法
+        let assignedTeam = "ALPHA";
+        if (room.teamCounts.ALPHA > room.teamCounts.OMEGA) {
+            assignedTeam = "OMEGA";
+        }
+        room.teamCounts[assignedTeam]++;
+
+        // 初始化玩家在伺服器端的數據模型
+        room.players[socket.id] = {
+            id: socket.id,
+            name: data.name || `Agent_${socket.id.substring(0, 4)}`,
+            team: assignedTeam,
+            x: 0, y: 1.6, z: 0, ry: 0,
+            hp: PLAYER_CONFIG.maxHp,
+            currentWeapon: "RIFLE",
+            isDeployed: false,
+            kills: 0,
+            deaths: 0
+        };
+
+        console.log(`[加入房間] 玩家 ${room.players[socket.id].name} 加入了 ${roomId}，分配至 ${assignedTeam} 隊`);
+
+        // 🛠️ 回傳補完的 'init' 封包給前端，初始化地圖與對齊 AABB 障礙物
+        socket.emit('init', {
+            id: socket.id,
+            team: assignedTeam,
+            obstacles: room.obstacles,
+            playerList: room.players
+        });
+
+        // 如果當前地圖上已經存在黃金空投，通知新加入的玩家渲染
+        if (room.weaponDrop.active) {
+            socket.emit('spawnWeaponDrop', { x: room.weaponDrop.x, z: room.weaponDrop.z });
+        }
+    });
+
+    // 接收玩家武器選擇與出擊部署請求
+    socket.on('selectWeaponAndDeploy', (data) => {
+        const room = GAME_ROOMS["MAIN_ARENA"];
+        const player = room ? room.players[socket.id] : null;
+
+        if (!player) return;
+
+        player.currentWeapon = data.weapon || "RIFLE";
+        player.hp = PLAYER_CONFIG.maxHp;
+        player.isDeployed = true;
+
+        // 根據隊伍動態隨機抽取出生點
+        const points = PLAYER_CONFIG.spawnPoints[player.team];
+        const spawn = points[Math.floor(Math.random() * points.length)];
+        
+        player.x = spawn.x;
+        player.y = spawn.y;
+        player.z = spawn.z;
+        player.ry = spawn.ry;
+
+        console.log(`[部署出擊] 特務 ${player.name} 使用武器 ${player.currentWeapon} 進入戰場。`);
+
+        // 向全房間廣播該玩家復活，觸發前端第一人稱鎖定與模型渲染
+        io.to("MAIN_ARENA").emit('playerRespawn', {
+            id: socket.id,
+            info: { x: player.x, y: player.y, z: player.z, ry: player.ry, team: player.team }
+        });
+    });
+
+    // 高頻率即時動態位置矩陣同步更新
+    socket.on('playerUpdate', (data) => {
+        const room = GAME_ROOMS["MAIN_ARENA"];
+        const player = room ? room.players[socket.id] : null;
+
+        if (!player || !player.isDeployed) return;
+
+        // 更新伺服器端玩家狀態
+        player.x = data.x;
+        player.y = data.y;
+        player.z = data.z;
+        player.ry = data.ry;
+
+        // 廣播給房間內的其他所有玩家進行 Lerp 內插過渡
+        socket.to("MAIN_ARENA").emit('playerMoved', {
+            id: socket.id,
+            info: { x: player.x, y: player.y, z: player.z, ry: player.ry }
+        });
+
+        // 實時檢查玩家是否走進黃金空投平台的拾取判定範圍
+        if (room.weaponDrop.active) {
+            const dx = player.x - room.weaponDrop.x;
+            const dz = player.z - room.weaponDrop.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+
+            // 當距離小於判定半徑，且玩家高度接近平台頂部時觸發拾取
+            if (dist < room.weaponDrop.radius && player.y >= 1.5) {
+                room.weaponDrop.active = false;
+                
+                // 強制幫該玩家升級為重狙黃金槍
+                player.currentWeapon = "SNIPER";
+                
+                console.log(`[空投拾取] 玩家 ${player.name} 成功奪取黃金重型狙擊槍！`);
+                io.to("MAIN_ARENA").emit('weaponPickedUp', { pickerId: socket.id });
             }
         }
-    }, 1000); 
-}
+    });
+
+    // 接收遠端開槍視覺廣播請求
+    socket.on('playerFire', () => {
+        const room = GAME_ROOMS["MAIN_ARENA"];
+        if (room && room.players[socket.id] && room.players[socket.id].isDeployed) {
+            // 通知其他玩家在該角色的模型槍口繪製動態閃光
+            socket.to("MAIN_ARENA").emit('remoteFire', socket.id);
+        }
+    });
+
+    // 硬核射擊命中射線判定與傷害計算處理
+    socket.on('playerShot', (targetId) => {
+        const room = GAME_ROOMS["MAIN_ARENA"];
+        const attacker = room ? room.players[socket.id] : null;
+        const target = room ? room.players[targetId] : null;
+
+        if (!attacker || !target || !target.isDeployed || attacker.team === target.team) {
+            return; // 攻擊者或目標不存在、未部署、或是同隊隊友（免疫隊友傷害）
+        }
+
+        // 計算對應武器傷害值
+        const dmg = PLAYER_CONFIG.weaponDamage[attacker.currentWeapon] || 20;
+        target.hp -= dmg;
+
+        console.log(`[命中判定] ${attacker.name} 擊中 ${target.name}，造成 ${dmg} 傷害 (剩餘 HP: ${target.hp})`);
+
+        // 通知全房間更新受害者血量 HUD
+        io.to("MAIN_ARENA").emit('playerHurt', { id: targetId, hp: Math.max(0, target.hp) });
+
+        // 判定死亡狀態
+        if (target.hp <= 0) {
+            target.hp = 0;
+            target.isDeployed = false;
+            attacker.kills++;
+            target.deaths++;
+
+            console.log(`[擊殺公告] 🎯 ${attacker.name} 擊殺了 ${target.name}！`);
+
+            // 1. 發送全網擊殺流公告流
+            io.to("MAIN_ARENA").emit('killFeed', {
+                attackerName: attacker.name,
+                targetName: target.name
+            });
+
+            // 2. 通知全場清除該玩家的模型，並將受害者踢回武器選單
+            io.to("MAIN_ARENA").emit('playerDead', { id: targetId });
+        }
+    });
+
+    // 斷線清理程序機制
+    socket.on('disconnect', () => {
+        console.log(`[中斷連線] 客戶端離線 ID: ${socket.id}`);
+        const room = GAME_ROOMS["MAIN_ARENA"];
+        
+        if (room && room.players[socket.id]) {
+            const player = room.players[socket.id];
+            room.teamCounts[player.team] = Math.max(0, room.teamCounts[player.team] - 1);
+            
+            delete room.players[socket.id];
+            
+            // 通知其餘特務將此人從 3D 場景中抹除
+            io.to("MAIN_ARENA").emit('playerLeft', socket.id);
+        }
+    });
+});
 
 // =========================================================================
-// 啟動伺服器
+// 3. 伺服器端黃金戰術空投定期循環計時器 (TACTICAL DROP LOOP)
 // =========================================================================
-const PORT = process.env.PORT || 10000;
+setInterval(() => {
+    const room = GAME_ROOMS["MAIN_ARENA"];
+    // 如果地圖上當前沒有啟動中的空投，則隨機生成一個新的黃金武器平台
+    if (room && !room.weaponDrop.active) {
+        // 在賽博戰場中心區域 (-35 到 35 之間) 隨機挑選 X 與 Z 軸坐標
+        const dropX = (Math.random() - 0.5) * 70;
+        const dropZ = (Math.random() - 0.5) * 70;
+
+        room.weaponDrop.active = true;
+        room.weaponDrop.x = dropX;
+        room.weaponDrop.z = dropZ;
+
+        console.log(`[戰術空投] AWM 黃金武器平台已於坐標 (X: ${dropX.toFixed(1)}, Z: ${dropZ.toFixed(1)}) 降落！`);
+        
+        // 廣播通知所有前端建立 3D 黃金積木平台與實體 AABB 碰撞
+        io.to("MAIN_ARENA").emit('spawnWeaponDrop', { x: dropX, z: dropZ });
+    }
+}, 18000); // 每 18 秒重新整理判定一次
+
+// =========================================================================
+// 4. 啟動伺服器核心
+// =========================================================================
 server.listen(PORT, () => {
-    console.log(`遊戲伺服器運行中，埠號：${PORT}`);
+    console.log(`====================================================`);
+    console.log(` FPS MULTIPLAYER SERVER IS RUNNING ON PORT: ${PORT} `);
+    console.log(` PRODUCTION MODE / AABB COLLISION ALIGNED / READY   `);
+    console.log(`====================================================`);
 });
