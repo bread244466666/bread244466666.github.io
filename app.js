@@ -33,9 +33,9 @@ scene.add(redLight);
 // 2. 武器庫物理與彈道參數配置
 // =========================================================================
 const WEAPON_CONFIGS = {
-    RIFLE: { maxAmmo: 30, aimFov: 35, color: 0x00ffcc, barrelLength: 0.5, barrelRadius: 0.02, fireRate: 130, damage: 15, recoil: 0.03, spread: 0.02, pellets: 1 },
-    SHOTGUN: { maxAmmo: 8, aimFov: 45, color: 0xff00ff, barrelLength: 0.35, barrelRadius: 0.035, fireRate: 800, damage: 25, recoil: 0.11, spread: 0.09, pellets: 6 },
-    SNIPER: { maxAmmo: 5, aimFov: 12, color: 0xffff00, barrelLength: 0.8, barrelRadius: 0.015, fireRate: 1200, damage: 100, recoil: 0.26, spread: 0.001, pellets: 1 }
+    RIFLE: { maxAmmo: 30, aimFov: 35, color: 0x00ffcc, barrelLength: 0.5, barrelRadius: 0.02, fireRate: 130, damage: 20, recoil: 0.03, spread: 0.02, pellets: 1 },
+    SHOTGUN: { maxAmmo: 8, aimFov: 45, color: 0xff00ff, barrelLength: 0.35, barrelRadius: 0.035, fireRate: 800, damage: 5, recoil: 0.11, spread: 0.09, pellets: 6 },
+    SNIPER: { maxAmmo: 5, aimFov: 12, color: 0xffff00, barrelLength: 0.8, barrelRadius: 0.015, fireRate: 1200, damage: 75, recoil: 0.26, spread: 0.001, pellets: 1 }
 };
 
 let currentWeaponType = "RIFLE"; 
