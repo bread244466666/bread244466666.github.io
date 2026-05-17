@@ -31,9 +31,18 @@ scene.add(redLight);
 // 2. 武器庫物理與彈道參數配置
 // =========================================================================
 const WEAPON_CONFIGS = {
+    // 【步槍】：中規中矩。5發致死（20*5=100）。彈道穩定，控槍好的人最愛。
     RIFLE: { maxAmmo: 30, aimFov: 35, color: 0x00ffcc, barrelLength: 0.5, barrelRadius: 0.02, fireRate: 130, damage: 20, recoil: 0.03, spread: 0.02, pellets: 1 },
-    SHOTGUN: { maxAmmo: 8, aimFov: 45, color: 0xff00ff, barrelLength: 0.35, barrelRadius: 0.035, fireRate: 800, damage: 15, recoil: 0.11, spread: 0.2, pellets: 6 },
-    SNIPER: { maxAmmo: 5, aimFov: 12, color: 0xffff00, barrelLength: 0.8, barrelRadius: 0.015, fireRate: 1200, damage: 85, recoil: 0.26, spread: 0.001, pellets: 1 }
+    
+    // 【散彈槍】：近戰壓制。單發彈丸 12 傷害 * 6 顆 = 總傷 72。
+    // 雖然貼臉全中不能秒殺（留給對手反擊機會），但能瞬間把人打殘，配合滑鏟極強。
+    // 將擴散度稍微收斂到 0.12，讓它在近距離更可靠，而不是你原本設定的 0.2（太散了打不中人）。
+    SHOTGUN: { maxAmmo: 6, aimFov: 45, color: 0xff00ff, barrelLength: 0.35, barrelRadius: 0.035, fireRate: 750, damage: 12, recoil: 0.13, spread: 0.12, pellets: 6 },
+    
+    // 【狙擊槍】：一槍致命。傷害直接給到 100。
+    // 代價是：把射速下調到 1.5 秒一發（fireRate: 1500），沒打中就會有極大的空檔被抓。
+    // 這才符合硬核慢速回血局的「邊緣試探」感——高風險，但只要賽到一槍就是一個擊殺！
+    SNIPER: { maxAmmo: 5, aimFov: 10, color: 0xffff00, barrelLength: 0.8, barrelRadius: 0.015, fireRate: 1500, damage: 100, recoil: 0.35, spread: 0.0, pellets: 1 }
 };
 
 let currentWeaponType = "RIFLE"; 
