@@ -290,7 +290,7 @@ socket.on('spawnWeaponDrop', (data) => {
     const boxGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
     const boxMat = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xffff00, emissiveIntensity: 0.8 });
     dropWeaponMesh = new THREE.Mesh(boxGeo, boxMat);
-    dropWeaponMesh.position.set(data.x, 0.4, data.z);
+    dropWeaponMesh.position.set(data.x, 2, data.z);
     scene.add(dropWeaponMesh);
 });
 socket.on('weaponPickedUp', () => { if (dropWeaponMesh) { scene.remove(dropWeaponMesh); dropWeaponMesh = null; } });
