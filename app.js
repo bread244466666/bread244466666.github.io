@@ -1,4 +1,11 @@
+// =========================================================================
+// 0. 全局動態特效變數
+// =========================================================================
 const killParticles = []; // 存放所有正在飛散的擊殺粒子
+let mouseXSpeed = 0;
+let mouseYSpeed = 0;
+let bobTime = 0; // 控制呼吸與走路晃動的時間軸
+
 // =========================================================================
 // 1. 3D 場景與電影級光影初始化
 // =========================================================================
@@ -8,9 +15,6 @@ scene.fog = new THREE.FogExp2(0x040712, 0.035);
 
 let defaultFOV = 75; 
 let aimFOV = 35; 
-let mouseXSpeed = 0;
-let mouseYSpeed = 0;
-let bobTime = 0; // 控制呼吸與走路晃動的時間軸
 const camera = new THREE.PerspectiveCamera(defaultFOV, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -32,20 +36,16 @@ redLight.position.set(-30, 40, -20);
 scene.add(redLight);
 
 // =========================================================================
-// 2. 武器庫物理與彈道參數配置
+// 2. 武器庫物理與彈道參數配置 (最新戰術硬核平衡版)
 // =========================================================================
 const WEAPON_CONFIGS = {
-    // 【步槍】：中規中矩。5發致死（20*5=100）。彈道穩定，控槍好的人最愛。
+    // 【步槍】：5發致死。彈道穩定。
     RIFLE: { maxAmmo: 30, aimFov: 35, color: 0x00ffcc, barrelLength: 0.5, barrelRadius: 0.02, fireRate: 130, damage: 20, recoil: 0.03, spread: 0.02, pellets: 1 },
     
-    // 【散彈槍】：近戰壓制。單發彈丸 12 傷害 * 6 顆 = 總傷 72。
-    // 雖然貼臉全中不能秒殺（留給對手反擊機會），但能瞬間把人打殘，配合滑鏟極強。
-    // 將擴散度稍微收斂到 0.12，讓它在近距離更可靠，而不是你原本設定的 0.2（太散了打不中人）。
+    // 【散彈槍】：近戰壓制。單發總傷 72，無法一槍秒殺，大幅修正散佈度至可靠範圍。
     SHOTGUN: { maxAmmo: 6, aimFov: 45, color: 0xff00ff, barrelLength: 0.35, barrelRadius: 0.035, fireRate: 750, damage: 12, recoil: 0.13, spread: 0.12, pellets: 6 },
     
-    // 【狙擊槍】：一槍致命。傷害直接給到 100。
-    // 代價是：把射速下調到 1.5 秒一發（fireRate: 1500），沒打中就會有極大的空檔被抓。
-    // 這才符合硬核慢速回血局的「邊緣試探」感——高風險，但只要賽到一槍就是一個擊殺！
+    // 【狙擊槍】：黃金空投。一槍致命(100血)，射擊間隔長。
     SNIPER: { maxAmmo: 5, aimFov: 10, color: 0xffff00, barrelLength: 0.8, barrelRadius: 0.015, fireRate: 1500, damage: 100, recoil: 0.35, spread: 0.0, pellets: 1 }
 };
 
@@ -281,7 +281,6 @@ socket.on('killFeed', (data) => {
     setTimeout(() => feedItem.remove(), 4000);
 });
 
-// 削弱版大招與連殺通知
 socket.on('streakBuff', (data) => { speedModifier = data.speedMultiplier; });
 socket.on('radarScan', (data) => { if (data.team === myTeam) isRadarXrayActive = true; });
 socket.on('radarScanEnd', () => { isRadarXrayActive = false; });
@@ -302,10 +301,8 @@ socket.on('playerDead', (data) => {
         speedModifier = 1.0; isRadarXrayActive = false;
         if (weaponOverlay) weaponOverlay.style.display = 'flex';
     } else { 
-        // ==== 【新增】在遠端玩家死亡的地方觸發霓虹爆散 ====
         if (remotePlayers[data.id]) {
             const deadPos = remotePlayers[data.id].position.clone();
-            // 這裡抓取原本設定的隊伍顏色（你可以根據具體邏輯傳入，此處預設紅/藍）
             const isAlpha = remotePlayers[data.id].children.some(c => c.material && c.material.emissive && c.material.emissive.b > 0);
             const effectColor = isAlpha ? 0x0088ff : 0xff3300;
             
@@ -373,7 +370,6 @@ document.addEventListener('mousemove', (event) => {
     camera.rotation.x -= event.movementY * sensitivity;
     camera.rotation.x = Math.max(-Math.PI / 2.3, Math.min(Math.PI / 2.3, camera.rotation.x));
 
-    // ==== 【新增】記錄滑鼠速度用於槍枝擺動 ====
     mouseXSpeed = event.movementX * 0.0005;
     mouseYSpeed = event.movementY * 0.0005;
 });
@@ -415,11 +411,8 @@ function handleMovement() {
     const direction = new THREE.Vector3(); camera.getWorldDirection(direction); direction.y = 0; direction.normalize();
     const right = new THREE.Vector3().crossVectors(direction, new THREE.Vector3(0, 1, 0)).normalize();
     
-    // =========================================================================
-    // 【核心機制：C 鍵滑鏟物理速度與相機高度衰減】
-    // =========================================================================
     let currentSpeed = isAiming ? moveSpeed * 0.45 : moveSpeed;
-    currentSpeed *= speedModifier; // 連殺大招倍率
+    currentSpeed *= speedModifier; 
 
     if (keysPressed['c'] && isGrounded && !isSliding) {
         isSliding = true; slideStartTime = Date.now();
@@ -429,8 +422,8 @@ function handleMovement() {
     if (isSliding) {
         const elapsed = Date.now() - slideStartTime;
         if (elapsed < slideDuration) {
-            currentSpeed *= 1.7; // 滑鏟時爆發衝刺
-            pEyeH = 0.9;         // 降低角色判定高度
+            currentSpeed *= 1.7; 
+            pEyeH = 0.9;         
         } else { isSliding = false; }
     }
 
@@ -442,7 +435,6 @@ function handleMovement() {
 
     const pRadius = 0.35; const pHeight = pEyeH + 0.2;
 
-    // AABB 雙軸滑牆碰撞檢查
     if (moveVec.x !== 0) {
         camera.position.x += moveVec.x;
         let pBoxX = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(camera.position.x, camera.position.y - (pEyeH * 0.5), camera.position.z), new THREE.Vector3(pRadius * 2, pHeight, pRadius * 2));
@@ -457,21 +449,17 @@ function handleMovement() {
         sequenceNumber++; pendingInputs.push({ seq: sequenceNumber, dx: camera.position.x - oldPos.x, dz: camera.position.z - oldPos.z });
     }
 
-    // =========================================================================
-    // 【核心機制：地圖中央彈跳墊物理斥力觸發】
-    // =========================================================================
     let distToPad = Math.sqrt(Math.pow(camera.position.x - jumpPadPos.x, 2) + Math.pow(camera.position.z - jumpPadPos.z, 2));
     if (distToPad < jumpPadPos.radius && isGrounded) {
-        velocityY = jumpStrength * 2.4; // 彈射高空
+        velocityY = jumpStrength * 2.4; 
         isGrounded = false;
     }
 
-    // 隨機空投拾取判定
     if (dropWeaponMesh) {
         let distToDrop = camera.position.distanceTo(dropWeaponMesh.position);
         if (distToDrop < 1.5) {
             socket.emit('pickupWeapon');
-            currentWeaponType = "SNIPER"; // 強制撿起黃金狙擊槍
+            currentWeaponType = "SNIPER"; 
             rebuildFirstPersonGun(currentWeaponType);
         }
     }
@@ -554,49 +542,39 @@ function animate() {
     requestAnimationFrame(animate);
     handleMovement(); 
     
-    // 渲染空投自轉特效
-    // =========================================================================
-    // 【動態優化】呼吸、走動晃動 (Bobbing) 與 武器擺動 (Sway)
-    // =========================================================================
+    // 渲染空投自轉特效 (已修正整合)
+    if (dropWeaponMesh) dropWeaponMesh.rotation.y += 0.03;
+
+    // 程序化動畫：呼吸、走動晃動 (Bobbing) 與 武器擺動 (Sway)
     targetWeaponPos.copy(isAiming ? aimPosition : hipfirePosition); 
 
-    // 判斷是否在移動
     const isMoving = keysPressed.w || keysPressed.s || keysPressed.a || keysPressed.d;
-    
     if (isMoving && isGrounded) {
-        // 走路時加快晃動頻率，滑鏟時速度變快晃動也變劇烈
         const bobSpeed = isSliding ? 0.25 : 0.12;
         const bobAmountX = isSliding ? 0.04 : 0.015;
         const bobAmountY = isSliding ? 0.02 : 0.01;
         
         bobTime += bobSpeed;
-        // 使用正弦與餘弦做出經典的 FPS 走動上下震盪
         targetWeaponPos.x += Math.cos(bobTime) * bobAmountX;
         targetWeaponPos.y += Math.sin(bobTime * 2) * bobAmountY;
     } else {
-        // 靜止時的微弱呼吸效果
         bobTime += 0.02;
         targetWeaponPos.y += Math.sin(bobTime) * 0.002;
     }
 
-    // 加上滑鼠甩槍時的動態擺動 (Sway) 偏移量
     if (!isAiming) {
         targetWeaponPos.x -= mouseXSpeed;
         targetWeaponPos.y += mouseYSpeed;
     }
 
-    // 平滑插值 (Lerp) 讓槍枝過渡極度流暢
     currentWeaponPos.lerp(targetWeaponPos, 0.2);
     
-    // 讓滑鼠動態擺動速度慢慢衰減歸零
     mouseXSpeed *= 0.85;
     mouseYSpeed *= 0.85;
 
     if (barrel) { 
         barrel.position.copy(currentWeaponPos); 
         barrel.rotation.z = weaponRotationZ; 
-        
-        // 甩槍時槍身產生微幅傾斜扭轉 (Sway Rotation)
         barrel.rotation.y = (Math.PI / 2) - mouseXSpeed * 1.5;
         barrel.rotation.x = mouseYSpeed * 1.5;
     }
@@ -609,20 +587,32 @@ function animate() {
         screenShakeIntensity *= 0.88; 
     }
     
-    // =========================================================================
-    // 【核心機制：削弱版連殺大招——雷達紅外透視渲染】
-    // =========================================================================
+    // 大招機制：雷達紅外透視渲染
     for (let id in remotePlayers) {
         if (isRadarXrayActive) {
-            // 透視大招啟動：強制讓敵方玩家模型穿透牆壁（關閉深度測試）
             remotePlayers[id].traverse((child) => {
                 if (child.isMesh) { child.material.depthTest = false; child.material.emissiveIntensity = 2.0; }
             });
         } else {
-            // 恢復正常遮擋
             remotePlayers[id].traverse((child) => {
                 if (child.isMesh) { child.material.depthTest = true; child.material.emissiveIntensity = 0.8; }
             });
+        }
+    }
+
+    // 擊殺粒子物理更新循環 (已移入主更新循環中，正常驅動下墜與熄滅)
+    for (let i = killParticles.length - 1; i >= 0; i--) {
+        const p = killParticles[i];
+        p.mesh.position.add(p.velocity);
+        p.velocity.y -= 0.008; // 模擬重力
+        p.life -= p.decay;
+        p.mesh.material.opacity = p.life;
+        
+        if (p.life <= 0) {
+            scene.remove(p.mesh);
+            p.mesh.geometry.dispose();
+            p.mesh.material.dispose();
+            killParticles.splice(i, 1);
         }
     }
 
@@ -635,8 +625,9 @@ function animate() {
     }
     renderer.render(scene, camera);
 }
+
+// 擊殺發光方塊爆散生成器
 function spawnKillEffect(position, teamColor) {
-    // 每次擊殺噴發 40 顆科技感霓虹粒子
     const particleCount = 40;
     const particleGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
     const particleMat = new THREE.MeshBasicMaterial({
@@ -647,13 +638,11 @@ function spawnKillEffect(position, teamColor) {
 
     for (let i = 0; i < particleCount; i++) {
         const mesh = new THREE.Mesh(particleGeo, particleMat);
-        // 從敵人的重心位置出發
         mesh.position.copy(position);
         
-        // 隨機炸裂速度方向 (X, Y, Z)
         const velocity = new THREE.Vector3(
             (Math.random() - 0.5) * 0.3,
-            Math.random() * 0.2 + 0.1, // 給予一個向上的噴發力
+            Math.random() * 0.2 + 0.1, 
             (Math.random() - 0.5) * 0.3
         );
 
@@ -661,10 +650,11 @@ function spawnKillEffect(position, teamColor) {
         killParticles.push({
             mesh: mesh,
             velocity: velocity,
-            life: 1.0, // 粒子壽命 (1.0 降到 0.0 銷毀)
-            decay: Math.random() * 0.02 + 0.015 // 隨機消散速度
+            life: 1.0, 
+            decay: Math.random() * 0.02 + 0.015 
         });
     }
 }
+
 window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
 animate();
