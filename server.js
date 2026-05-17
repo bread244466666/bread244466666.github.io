@@ -36,15 +36,44 @@ function startRoomTimer(roomId) {
     
     rooms[roomId].timerInterval = setInterval(() => {
         const room = rooms[roomId];
-        if (!room) { clearInterval(this); return; }
+        if (!room) { 
+            clearInterval(rooms[roomId]?.timerInterval); 
+            return; 
+        }
 
+        // 1. 時間遞減與同步
         room.timeLeft--;
         io.to(roomId).emit('timeUpdate', room.timeLeft);
-
+        
+        // =========================================================================
+        // 【新增：脫離戰鬥自動回血機制】
+        // =========================================================================
+        const now = Date.now();
+        for (let pId in room.players) {
+            const p = room.players[pId];
+            // 檢查條件：必須已部署、活著、受傷過（血量小於 100）
+            if (p.isDeployed && p.hp > 0 && p.hp < 100) {
+                // 距離上次受傷超過 4000 毫秒 (4秒) 則觸發回血
+                if (!p.lastHurtTime || (now - p.lastHurtTime > 10000)) {
+                    p.hp = Math.min(100, p.hp + 5); // 每秒回復 20 點，最高 100
+                    
+                    // 同步生命值給該房間的所有人（前端會接收並刷新血條）
+                    io.to(roomId).emit('playerHurt', { 
+                        id: pId, 
+                        targetName: p.name, 
+                        hp: p.hp, 
+                        attackerX: p.x, 
+                        attackerZ: p.z 
+                    });
+                }
+            }
+        }
+        // =========================================================================
+        
+        // 2. 戰局結束判定
         if (room.timeLeft <= 0) {
             clearInterval(room.timerInterval);
             
-            // 判定勝負
             let winner = "DRAW";
             if (room.scores.ALPHA > room.scores.OMEGA) winner = "ALPHA";
             else if (room.scores.OMEGA > room.scores.ALPHA) winner = "OMEGA";
@@ -60,12 +89,15 @@ function startRoomTimer(roomId) {
                     rooms[roomId].timeLeft = MATCH_DURATION;
                     rooms[roomId].scores = { ALPHA: 0, OMEGA: 0 };
                     
-                    // 將所有人解除部署，重新彈出選槍畫面
+                    // 將所有人解除部署，重置生命值，重新彈出選槍畫面
                     for (let pId in rooms[roomId].players) {
                         rooms[roomId].players[pId].isDeployed = false;
                         rooms[roomId].players[pId].hp = 100;
+                        rooms[roomId].players[pId].lastHurtTime = 0; // 重置受傷時間
                     }
                     io.to(roomId).emit('matchReset', rooms[roomId].players);
+                    
+                    // 重新啟動下一局的計時器
                     startRoomTimer(roomId);
                 }
             }, 5000);
@@ -176,6 +208,8 @@ io.on('connection', (socket) => {
 
             let damage = attacker.weapon === "SHOTGUN" ? 25 : (attacker.weapon === "SNIPER" ? 100 : 15);
             target.hp -= damage;
+            // 在 target.hp -= damage; 的下方加上這一行：
+            target.lastHurtTime = Date.now();
 
             if (target.hp <= 0) {
                 target.hp = 0; target.isDeployed = false;
