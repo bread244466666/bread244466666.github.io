@@ -1,736 +1,1084 @@
 // =========================================================================
-// 1. 全局變數、狀態控制與配置
+// MULTIPLAYER FIRST-PERSON SHOOTER CORE ENGINE - FRONTEND (app.js)
+// TOTAL LINES: 1000+ SYSTEM ARCHITECTURE (NO SHORTCUTS / FULL RENDER LOOP)
 // =========================================================================
-const socket = io(); 
 
-let scene, camera, renderer;
-let myId = null;
-let myTeam = null;
-let currentWeapon = "RIFLE";
-let isDeployed = false;
+(function () {
+    "use strict";
 
-// 物理與移動參數
-const moveSpeed = 0.12;
-const sprintMultiplier = 1.4;
-let playerVelocity = { x: 0, y: 0, z: 0 };
-const gravity = -0.008;
-const jumpStrength = 0.18; // 確保能跳上黃金平台
-let isGrounded = false;
+    // =====================================================================
+    // 1. 全局配置與核心狀態管理機 (ENGINE STATES)
+    // =====================================================================
+    const socket = io(); // 部署於 Render 時自動偵測當前網域
 
-// 玩家視角旋轉控制 (Pointer Lock 控制核心)
-let pitchObject = new THREE.Object3D();
-let yawObject = new THREE.Object3D();
+    let scene, camera, renderer;
+    let myId = null;
+    let myTeam = null;
+    let currentWeapon = "RIFLE";
+    let isDeployed = false;
 
-// 輸入狀態追蹤
-const keys = {};
-let isAiming = false;
-let isShooting = false;
-let lastShotTime = 0;
+    // 基礎物理與客戶端動態運動數值
+    const PHYSICS_CONFIG = {
+        moveSpeed: 0.11,
+        sprintMultiplier: 1.45,
+        crouchMultiplier: 0.55,
+        gravity: -0.009,         // 精準重力加速度常數
+        jumpStrength: 0.19,     // 確保最高跳躍高度能完美踏上 Y=1.2 的黃金平台
+        playerRadius: 0.4,
+        playerHeight: 1.8,
+        eyeHeight: 1.6          // 相機相對於腳底的 Y 軸偏置
+    };
 
-// 武器特性配置表 (後座力、射速、彈道散佈)
-const WEAPON_SPECS = {
-    RIFLE: {
-        fireRate: 150,      // 毫秒/發
-        spread: 0.02,       // 腰射散佈
-        adsSpread: 0.005,   // 瞄準散佈
-        recoilY: 0.015,     // 垂直後座力
-        recoilX: 0.005,     // 水平後座力
-        hipPos: { x: 0.25, y: -0.25, z: -0.5, rx: 0, ry: 0, rz: 0 },
-        adsPos: { x: 0.0, y: -0.12, z: -0.35, rx: 0.02, ry: 0, rz: 0.06 }
-    },
-    SHOTGUN: {
-        fireRate: 800,
-        spread: 0.08,
-        adsSpread: 0.05,
-        recoilY: 0.06,
-        recoilX: 0.02,
-        hipPos: { x: 0.25, y: -0.25, z: -0.45, rx: 0, ry: 0, rz: 0 },
-        adsPos: { x: 0.0, y: -0.10, z: -0.32, rx: 0.01, ry: 0, rz: 0.04 }
-    },
-    SNIPER: {
-        fireRate: 1200,
-        spread: 0.15,
-        adsSpread: 0.0,
-        recoilY: 0.1,
-        recoilX: 0.0,
-        hipPos: { x: 0.28, y: -0.28, z: -0.6, rx: 0, ry: 0, rz: 0 },
-        adsPos: { x: 0.0, y: -0.08, z: -0.4, rx: 0, ry: 0, rz: 0 }
-    }
-};
+    // 當前玩家物理實體狀態
+    let playerPosition = { x: 0, y: 1.6, z: 0 };
+    let playerVelocity = { x: 0, y: 0, z: 0 };
+    let isGrounded = false;
+    let isCrouching = false;
+    let isSprinting = false;
 
-// 遊戲對象集合
-const remotePlayers = {};
-const obstacles = [];
-let weaponDropMesh = null;
-let myGunMesh = null;
+    // 視角控制系統 (標準 FPS 雙軸階層架構)
+    let yawObject = new THREE.Object3D();
+    let pitchObject = new THREE.Object3D();
 
-// 特效收集器 (用於在 animate 循環中更新或淡出)
-const bulletTrails = [];
-const damageIndicators = [];
+    // 輸入緩衝追蹤器
+    const inputBuffer = {};
+    let isAiming = false;
+    let isShooting = false;
+    let lastShotTime = 0;
 
-// =========================================================================
-// 2. 遊戲初始化入口與 UI 建立
-// =========================================================================
-function initGame() {
-    // 切換 UI 顯示
-    const startScreen = document.getElementById('start-screen');
-    const lobbyUi = document.getElementById('lobby-ui');
-    if (startScreen) startScreen.style.display = 'none';
-    if (lobbyUi) lobbyUi.style.display = 'block';
+    // 遊戲世界內對象快取容器
+    const remotePlayers = {};
+    const obstacles = [];
+    let weaponDropMesh = null;
+    let myGunMesh = null;
 
-    // 建立 3D 場景
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0f111a); // 暗色科技感天空
-    scene.fog = new THREE.FogExp2(0x0f111a, 0.015);
+    // 全局粒子系統與動態視覺特效收集佇列
+    const bulletTrails = [];
+    const particleSystems = [];
+    const dynamicLights = [];
+    const damageTexts = [];
 
-    // 相機設定
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    
-    // 建立標準 FPS 視角控制階層
-    pitchObject.add(camera);
-    yawObject.add(pitchObject);
-    scene.add(yawObject);
-
-    // WebGL 渲染器
-    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    document.body.appendChild(renderer.domElement);
-
-    // 環境光與動態光源
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
-    scene.add(ambientLight);
-    
-    const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    sunLight.position.set(30, 60, 30);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 2048;
-    sunLight.shadow.mapSize.height = 2048;
-    scene.add(sunLight);
-
-    // 建造大型戰場網格地板
-    buildBattleground();
-
-    // 建造動態 2D UI 疊加層 (血條、準星、擊殺通知欄)
-    buildGameOverlayUI();
-
-    // 綁定所有輸入監聽
-    setupInputListeners();
-
-    // 啟動主渲染引擎循環
-    animate();
-}
-
-// 繪製科技風棋盤格地板
-function buildBattleground() {
-    const floorSize = 150;
-    const floorGeo = new THREE.PlaneGeometry(floorSize, floorSize, 32, 32);
-    const floorMat = new THREE.MeshStandardMaterial({ 
-        color: 0x1e2233, 
-        roughness: 0.7,
-        metalness: 0.1
-    });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
-    scene.add(floor);
-
-    // 加上網格輔助線
-    const grid = new THREE.GridHelper(floorSize, 60, 0x00ffcc, 0x444444);
-    grid.position.y = 0.01;
-    scene.add(grid);
-}
-
-// =========================================================================
-// 3. 全自動 HTML/CSS 界面建構 (確保不用手動補程式碼)
-// =========================================================================
-function buildGameOverlayUI() {
-    // 1. 螢光準星
-    if (!document.getElementById('game-crosshair')) {
-        const ch = document.createElement('div');
-        ch.id = 'game-crosshair';
-        Object.assign(ch.style, {
-            position: 'absolute', top: '50%', left: '50%',
-            width: '12px', height: '12px',
-            transform: 'translate(-50%, -50%)',
-            pointerEvents: 'none', zIndex: '1000'
-        });
-        const style = document.createElement('style');
-        style.innerHTML = `
-            #game-crosshair::before, #game-crosshair::after { content: ''; position: absolute; background: #00ff66; transition: all 0.1s; }
-            #game-crosshair::before { top: 5px; left: -6px; width: 24px; height: 2px; }
-            #game-crosshair::after { top: -6px; left: 5px; width: 2px; height: 24px; }
-            .hit-marker { position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); pointer-events: none; zIndex: 1001; }
-            .hit-marker::before, .hit-marker::after { content: ''; position: absolute; width: 2px; height: 10px; background: red; }
-        `;
-        document.head.appendChild(style);
-        document.body.appendChild(ch);
-    }
-
-    // 2. 戰場狀態 HUD (生命值與擊殺欄)
-    if (!document.getElementById('game-hud')) {
-        const hud = document.createElement('div');
-        hud.id = 'game-hud';
-        Object.assign(hud.style, {
-            position: 'absolute', bottom: '20px', left: '20px',
-            color: '#fff', fontFamily: 'monospace', fontSize: '24px',
-            background: 'rgba(0,0,0,0.5)', padding: '15px', borderRadius: '5px',
-            pointerEvents: 'none', zIndex: '1000'
-        });
-        hud.innerHTML = `
-            <div>TEAM: <span id="hud-team">-</span></div>
-            <div>HP: <span id="hud-hp">100</span>/100</div>
-            <div style="width:200px; height:10px; background:#333; margin-top:5px;">
-                <div id="hp-bar" style="width:100%; height:100%; background:#00ff66; transition: width 0.1s;"></div>
-            </div>
-        `;
-        document.body.appendChild(hud);
-    }
-}
-
-// =========================================================================
-// 4. 機械感 3D 槍枝建構 (消滅木棍感的關鍵細節)
-// =========================================================================
-function createVisualWeapon(type) {
-    const gunGroup = new THREE.Group();
-
-    // 1. 主機匣 (Receiver)
-    const receiverGeo = new THREE.BoxGeometry(0.05, 0.07, 0.22);
-    const metalMat = new THREE.MeshStandardMaterial({ color: 0x282c34, metalness: 0.8, roughness: 0.2 });
-    const receiver = new THREE.Mesh(receiverGeo, metalMat);
-    receiver.castShadow = true;
-    gunGroup.add(receiver);
-
-    // 2. 護木與槍管 (Handguard & Barrel)
-    const barrelGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.3);
-    const barrelMat = new THREE.MeshStandardMaterial({ color: 0x1e2025, metalness: 0.9, roughness: 0.1 });
-    const barrel = new THREE.Mesh(barrelGeo, barrelMat);
-    barrel.rotation.x = Math.PI / 2;
-    barrel.position.set(0, 0.01, -0.22);
-    barrel.castShadow = true;
-    gunGroup.add(barrel);
-
-    // 3. 戰術滑軌與機械瞄具 (Tactical Rail & Iron Sights) -> 徹底終結直棍感
-    const railGeo = new THREE.BoxGeometry(0.015, 0.01, 0.2);
-    const rail = new THREE.Mesh(railGeo, metalMat);
-    rail.position.set(0, 0.04, -0.05);
-    gunGroup.add(rail);
-
-    // 螢光前準星 (Front Sight Blade)
-    const frontSightGeo = new THREE.BoxGeometry(0.006, 0.02, 0.01);
-    const greenGlowMat = new THREE.MeshBasicMaterial({ color: 0x00ff66 });
-    const frontSight = new THREE.Mesh(frontSightGeo, greenGlowMat);
-    frontSight.position.set(0, 0.045, -0.35);
-    gunGroup.add(frontSight);
-
-    // 後照門 (Rear Sight)
-    const rearSightGeo = new THREE.BoxGeometry(0.02, 0.015, 0.01);
-    const rearSight = new THREE.Mesh(rearSightGeo, metalMat);
-    rearSight.position.set(0, 0.048, 0.05);
-    gunGroup.add(rearSight);
-
-    // 4. 握把與彈匣 (Grip & Magazine)
-    const gripGeo = new THREE.BoxGeometry(0.03, 0.09, 0.04);
-    const grip = new THREE.Mesh(gripGeo, metalMat);
-    grip.position.set(0, -0.07, 0.03);
-    grip.rotation.x = 0.3;
-    gunGroup.add(grip);
-
-    const magGeo = new THREE.BoxGeometry(0.025, 0.12, 0.04);
-    const mag = new THREE.Mesh(magGeo, metalMat);
-    mag.position.set(0, -0.08, -0.08);
-    mag.rotation.x = -0.15;
-    gunGroup.add(mag);
-
-    // 武器專屬配件修改
-    if (type === "SNIPER") {
-        // 大口徑高倍率狙擊鏡
-        const scopeGroup = new THREE.Group();
-        const tubeGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.15);
-        const tube = new THREE.Mesh(tubeGeo, metalMat);
-        tube.rotation.x = Math.PI / 2;
-        scopeGroup.add(tube);
-
-        const lensGeo = new THREE.CircleGeometry(0.016, 16);
-        const lensMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, side: THREE.DoubleSide });
-        const lens = new THREE.Mesh(lensGeo, lensMat);
-        lens.position.set(0, 0, 0.076);
-        scopeGroup.add(lens);
-
-        scopeGroup.position.set(0, 0.065, -0.02);
-        gunGroup.add(scopeGroup);
-        
-        // 加長槍管
-        barrel.scale.set(1.0, 1.8, 1.0);
-        barrel.position.set(0, 0.01, -0.34);
-    } else if (type === "SHOTGUN") {
-        // 雙管散彈槍結構
-        barrel.scale.set(2.2, 0.75, 2.2);
-        mag.visible = false; // 散彈槍無外突彈匣
-    }
-
-    return gunGroup;
-}
-
-function equipWeaponMesh(type) {
-    if (myGunMesh) pitchObject.remove(myGunMesh);
-    
-    myGunMesh = createVisualWeapon(type);
-    
-    // 初始化位置至對應武器的腰射坐標
-    const pos = WEAPON_SPECS[type].hipPos;
-    myGunMesh.position.set(pos.x, pos.y, pos.z);
-    pitchObject.add(myGunMesh);
-}
-
-// =========================================================================
-// 5. 完整輸入系統與動態開鏡監聽
-// =========================================================================
-function setupInputListeners() {
-    // 鍵盤處理
-    window.addEventListener('keydown', (e) => {
-        keys[e.code] = true;
-        
-        // 執行跳躍限制
-        if (e.code === 'Space' && isGrounded && isDeployed) {
-            playerVelocity.y = jumpStrength;
-            isGrounded = false;
+    // =====================================================================
+    // 2. 武器特性與 ADS 第一人稱矩陣變換配置表 (終結木棍透視)
+    // =====================================================================
+    const WEAPON_DATABASE = {
+        RIFLE: {
+            name: "突擊步槍 (AR-15 Custom)",
+            fireRate: 140,       // 射速 (ms)
+            spread: 0.025,      // 腰射彈道擴散
+            adsSpread: 0.004,    // 開鏡瞄準彈道擴散
+            recoilY: 0.016,      // 垂直後座力最大角度
+            recoilX: 0.006,      // 水平後座力左右隨機
+            recoilRecovery: 0.1, // 後座力恢復係數
+            zoomFOV: 48,         // 開鏡後的視野 FOV
+            hipTransform: { x: 0.24, y: -0.24, z: -0.52, rx: 0, ry: 0, rz: 0 },
+            adsTransform: { x: 0.0, y: -0.125, z: -0.38, rx: 0.015, ry: 0, rz: 0.06 } // 👈 rz: 0.06 帶來右傾戰術機瞄質感
+        },
+        SHOTGUN: {
+            name: "戰術散彈槍 (M870)",
+            fireRate: 850,
+            spread: 0.09,
+            adsSpread: 0.065,
+            recoilY: 0.065,
+            recoilX: 0.02,
+            recoilRecovery: 0.08,
+            zoomFOV: 55,
+            hipTransform: { x: 0.22, y: -0.22, z: -0.48, rx: 0, ry: 0, rz: 0 },
+            adsTransform: { x: 0.0, y: -0.11, z: -0.34, rx: 0.01, ry: 0, rz: 0.04 }
+        },
+        SNIPER: {
+            name: "重型狙擊槍 (AWM Gold)",
+            fireRate: 1300,
+            spread: 0.18,
+            adsSpread: 0.0,
+            recoilY: 0.12,
+            recoilX: 0.0,
+            recoilRecovery: 0.05,
+            zoomFOV: 18,         // 超高倍率縮放
+            hipTransform: { x: 0.26, y: -0.26, z: -0.62, rx: 0, ry: 0, rz: 0 },
+            adsTransform: { x: 0.0, y: -0.075, z: -0.42, rx: 0, ry: 0, rz: 0 }
         }
-    });
+    };
 
-    window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+    // =====================================================================
+    // 3. 遊戲主入口初始化模組 (ENGINE INITIALIZATION)
+    // =====================================================================
+    function initializeEngineCore() {
+        console.log("FPS Engine Core Initializing...");
 
-    // 點擊鎖定視角
-    window.addEventListener('click', () => {
-        if (isDeployed && document.pointerLockElement !== document.body) {
-            document.body.requestPointerLock();
+        // 介面狀態切換
+        toggleUIElement('start-screen', false);
+        toggleUIElement('lobby-ui', true);
+
+        // 3D 場景核心環境架設
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0b10); 
+        scene.fog = new THREE.FogExp2(0x0a0b10, 0.012);
+
+        // 透視相機架設
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 1000);
+        
+        // 建立階層式 Pointer Lock 旋轉結構
+        pitchObject.add(camera);
+        yawObject.add(pitchObject);
+        scene.add(yawObject);
+
+        // 物理基準高度初始化
+        yawObject.position.set(0, PHYSICS_CONFIG.eyeHeight, 0);
+
+        // 渲染器高性能配置
+        renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            powerPreference: "high-performance",
+            logarithmicDepthBuffer: false
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.0;
+        document.body.appendChild(renderer.domElement);
+
+        // 光照系統布署
+        setupSceneLighting();
+
+        // 科技風格賽博戰場地圖建構
+        generateCyberBattleground();
+
+        // 渲染動態 2D DOM 疊加 HUD 系統
+        buildAdvancedDOMOverlay();
+
+        // 綁定極限輸入事件監聽器
+        bindInputSystemEventListeners();
+
+        // 啟動主渲染與物理運算雙循環引擎
+        executeMainRenderLoop();
+
+        console.log("FPS Engine Core Online. Systems Stable.");
+    }
+
+    // =====================================================================
+    // 4. 場景光照與環境建構模組 (ENVIRONMENT GENERATION)
+    // =====================================================================
+    function setupSceneLighting() {
+        const ambientLight = new THREE.AmbientLight(0x222533, 0.4);
+        scene.add(ambientLight);
+
+        const primarySun = new THREE.DirectionalLight(0xffffff, 0.7);
+        primarySun.position.set(40, 80, 20);
+        primarySun.castShadow = true;
+        primarySun.shadow.mapSize.width = 2048;
+        primarySun.shadow.mapSize.height = 2048;
+        primarySun.shadow.camera.near = 0.5;
+        primarySun.shadow.camera.far = 250;
+        
+        const d = 60;
+        primarySun.shadow.camera.left = -d;
+        primarySun.shadow.camera.right = d;
+        primarySun.shadow.camera.top = d;
+        primarySun.shadow.camera.bottom = -d;
+        primarySun.shadow.bias = -0.0005;
+        scene.add(primarySun);
+
+        // 基地霓虹氛圍藍色補光
+        const neonCyanLight = new THREE.DirectionalLight(0x00ffff, 0.25);
+        neonCyanLight.position.set(-40, 20, -20);
+        scene.add(neonCyanLight);
+    }
+
+    function generateCyberBattleground() {
+        const arenaSize = 160;
+
+        // 1. 地板網格主體
+        const floorGeo = new THREE.PlaneGeometry(arenaSize, arenaSize, 1, 1);
+        const floorMat = new THREE.MeshStandardMaterial({
+            color: 0x11131a,
+            roughness: 0.65,
+            metalness: 0.2
+        });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // 2. 科技感發光網格
+        const gridHelper = new THREE.GridHelper(arenaSize, 80, 0x00ffaa, 0x222633);
+        gridHelper.position.y = 0.01;
+        scene.add(gridHelper);
+
+        // 3. 外圍防逃隔離電子巨牆
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0x151922, roughness: 0.5 });
+        const wallHeight = 12;
+        const wallThickness = 2;
+
+        const wallConfigs = [
+            { w: arenaSize, h: wallHeight, d: wallThickness, x: 0, y: wallHeight / 2, z: -arenaSize / 2 },
+            { w: arenaSize, h: wallHeight, d: wallThickness, x: 0, y: wallHeight / 2, z: arenaSize / 2 },
+            { w: wallThickness, h: wallHeight, d: arenaSize, x: -arenaSize / 2, y: wallHeight / 2, z: 0 },
+            { w: wallThickness, h: wallHeight, d: arenaSize, x: arenaSize / 2, y: wallHeight / 2, z: 0 }
+        ];
+
+        wallConfigs.forEach(w => {
+            const wallGeo = new THREE.BoxGeometry(w.w, w.h, w.d);
+            const wallMesh = new THREE.Mesh(wallGeo, wallMat);
+            wallMesh.position.set(w.x, w.y, w.z);
+            wallMesh.receiveShadow = true;
+            wallMesh.castShadow = true;
+            scene.add(wallMesh);
+            obstacles.push(wallMesh); // 塞入 AABB 實體牆壁碰撞陣列
+        });
+    }
+
+    // =====================================================================
+    // 5. 高階第一人稱 3D 槍枝手工組裝模組 (ANTI-STICK WEAPON MODELER)
+    // =====================================================================
+    function craftTactical3DWeapon(type) {
+        const weaponGroup = new THREE.Group();
+
+        // 通用暗黑鎢鋼塗裝材質
+        const receiverMat = new THREE.MeshStandardMaterial({ color: 0x1f232b, metalness: 0.85, roughness: 0.25 });
+        const polymerMat = new THREE.MeshStandardMaterial({ color: 0x111215, metalness: 0.2, roughness: 0.6 });
+        const steelMat = new THREE.MeshStandardMaterial({ color: 0x0c0d10, metalness: 0.95, roughness: 0.15 });
+        const tritiumMat = new THREE.MeshBasicMaterial({ color: 0x33ff66 }); // 氚氣夜光瞄具
+
+        // 1. 主機匣盒 (Receiver)
+        const recGeo = new THREE.BoxGeometry(0.046, 0.065, 0.24);
+        const receiver = new THREE.Mesh(recGeo, receiverMat);
+        receiver.castShadow = true;
+        weaponGroup.add(receiver);
+
+        // 2. 戰術上機匣導軌 (Picatinny Rail)
+        const railGeo = new THREE.BoxGeometry(0.016, 0.012, 0.22);
+        const rail = new THREE.Mesh(railGeo, steelMat);
+        rail.position.set(0, 0.038, -0.01);
+        weaponGroup.add(rail);
+
+        // 3. 後照門 (Rear Aperture Sight) -> 消除長條棍子感的關鍵核心
+        const rearSightGroup = new THREE.Group();
+        const baseGeo = new THREE.BoxGeometry(0.024, 0.016, 0.01);
+        const baseMesh = new THREE.Mesh(baseGeo, receiverMat);
+        rearSightGroup.add(baseMesh);
+        
+        const ringGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.006, 8);
+        const ring = new THREE.Mesh(ringGeo, steelMat);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.set(0, 0.012, 0);
+        rearSightGroup.add(ring);
+        
+        rearSightGroup.position.set(0, 0.045, 0.09);
+        weaponGroup.add(rearSightGroup);
+
+        // 4. 槍管組件 (Barrel & Gas Block)
+        let barrelLength = 0.32;
+        if (type === "SNIPER") barrelLength = 0.55;
+        if (type === "SHOTGUN") barrelLength = 0.24;
+
+        const barrelGeo = new THREE.CylinderGeometry(0.011, 0.011, barrelLength, 8);
+        const barrel = new THREE.Mesh(barrelGeo, steelMat);
+        barrel.rotation.x = Math.PI / 2;
+        barrel.position.set(0, 0.008, -(0.12 + barrelLength / 2));
+        barrel.castShadow = true;
+        weaponGroup.add(barrel);
+
+        // 5. 氚氣螢光前準星 (Front Tritium Sight Blade)
+        const frontPostGroup = new THREE.Group();
+        const postGeo = new THREE.BoxGeometry(0.006, 0.022, 0.01);
+        const post = new THREE.Mesh(postGeo, receiverMat);
+        frontPostGroup.add(post);
+        
+        const glowDotGeo = new THREE.BoxGeometry(0.004, 0.004, 0.004);
+        const glowDot = new THREE.Mesh(glowDotGeo, tritiumMat);
+        glowDot.position.set(0, 0.008, 0.004);
+        frontPostGroup.add(glowDot);
+
+        frontPostGroup.position.set(0, 0.042, -(0.11 + barrelLength));
+        weaponGroup.add(frontPostGroup);
+
+        // 6. 下人體工學握把 (Pistol Grip)
+        const gripGeo = new THREE.BoxGeometry(0.028, 0.085, 0.036);
+        const grip = new THREE.Mesh(gripGeo, polymerMat);
+        grip.position.set(0, -0.068, 0.04);
+        grip.rotation.x = 0.28;
+        weaponGroup.add(grip);
+
+        // 7. 各武器特有特徵構造分支
+        if (type === "RIFLE") {
+            // 曲弧形彈匣
+            const magGeo = new THREE.BoxGeometry(0.024, 0.13, 0.05);
+            const mag = new THREE.Mesh(magGeo, polymerMat);
+            mag.position.set(0, -0.085, -0.06);
+            mag.rotation.x = -0.22;
+            weaponGroup.add(mag);
+
+            // 鏤空散熱護木
+            const handguardGeo = new THREE.CylinderGeometry(0.022, 0.022, 0.18, 8);
+            const handguard = new THREE.Mesh(handguardGeo, polymerMat);
+            handguard.rotation.x = Math.PI / 2;
+            handguard.position.set(0, 0.008, -0.2);
+            weaponGroup.add(handguard);
+        } 
+        else if (type === "SNIPER") {
+            // 高倍率特戰狙擊鏡組 (Advanced Scope Assembly)
+            const scopeContainer = new THREE.Group();
+            const mainTubeGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.18, 12);
+            const mainTube = new THREE.Mesh(mainTubeGeo, receiverMat);
+            mainTube.rotation.x = Math.PI / 2;
+            scopeContainer.add(mainTube);
+
+            // 前遮光罩大口徑筒
+            const bellGeo = new THREE.CylinderGeometry(0.026, 0.018, 0.05, 12);
+            const bell = new THREE.Mesh(bellGeo, receiverMat);
+            bell.rotation.x = Math.PI / 2;
+            bell.position.z = -0.09;
+            scopeContainer.add(bell);
+
+            // 狙擊鏡反光鏡面
+            const lensGeo = new THREE.CircleGeometry(0.016, 16);
+            const lensMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, side: THREE.DoubleSide });
+            const lens = new THREE.Mesh(lensGeo, lensMat);
+            lens.position.set(0, 0, 0.091);
+            scopeContainer.add(lens);
+
+            // 鏡座
+            const mountGeo = new THREE.BoxGeometry(0.012, 0.03, 0.08);
+            const mount = new THREE.Mesh(mountGeo, steelMat);
+            mount.position.y = -0.02;
+            scopeContainer.add(mount);
+
+            scopeContainer.position.set(0, 0.07, -0.01);
+            weaponGroup.add(scopeContainer);
+
+            // 直型盒狀彈匣
+            const sMagGeo = new THREE.BoxGeometry(0.024, 0.09, 0.045);
+            const sMag = new THREE.Mesh(sMagGeo, receiverMat);
+            sMag.position.set(0, -0.075, -0.04);
+            weaponGroup.add(sMag);
+        } 
+        else if (type === "SHOTGUN") {
+            // 下方泵動管狀彈倉與握木護手
+            const pumpGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.16, 8);
+            const pump = new THREE.Mesh(pumpGeo, polymerMat);
+            pump.rotation.x = Math.PI / 2;
+            pump.position.set(0, -0.012, -0.18);
+            weaponGroup.add(pump);
         }
-    });
 
-    // 視角轉動滑鼠邏輯
-    window.addEventListener('mousemove', (e) => {
-        if (document.pointerLockElement === document.body) {
-            const sensitivity = isAiming ? 0.001 : 0.002; // 開鏡時自動降低靈敏度協助精準瞄準
-            yawObject.rotation.y -= e.movementX * sensitivity;
-            pitchObject.rotation.x -= e.movementY * sensitivity;
+        return weaponGroup;
+    }
+
+    function syncActiveWeaponTransformMesh(type) {
+        if (myGunMesh) pitchObject.remove(myGunMesh);
+        
+        myGunMesh = craftTactical3DWeapon(type);
+        
+        // 設定初始預設腰射變換坐標
+        const t = WEAPON_DATABASE[type].hipTransform;
+        myGunMesh.position.set(t.x, t.y, t.z);
+        pitchObject.add(myGunMesh);
+    }
+
+    // =====================================================================
+    // 6. DOM HUD 與動態戰術圖形元件生成 (ADVANCED GUI MODULE)
+    // =====================================================================
+    function toggleUIElement(id, show) {
+        const el = document.getElementById(id);
+        if (el) el.style.display = show ? 'block' : 'none';
+    }
+
+    function buildAdvancedDOMOverlay() {
+        // 1. 全方位殺戮流動式通知通知欄 (Killfeed Layer)
+        if (!document.getElementById('killfeed-container')) {
+            const kf = document.createElement('div');
+            kf.id = 'killfeed-container';
+            Object.assign(kf.style, {
+                position: 'absolute', top: '20px', right: '20px',
+                width: '320px', display: 'flex', flexDirection: 'column',
+                gap: '6px', pointerEvents: 'none', zIndex: '2000',
+                fontFamily: '"Courier New", monospace', fontSize: '14px'
+            });
+            document.body.appendChild(kf);
+        }
+
+        // 2. 特種雷達掃描雷達 HUD 元件 (Radar System)
+        if (!document.getElementById('tactical-radar')) {
+            const radar = document.createElement('div');
+            radar.id = 'tactical-radar';
+            Object.assign(radar.style, {
+                position: 'absolute', top: '20px', left: '20px',
+                width: '110px', height: '110px', borderRadius: '50%',
+                background: 'rgba(10, 15, 26, 0.75)', border: '2px solid #00ffaa',
+                boxShadow: '0 0 12px rgba(0,255,170,0.3)', pointerEvents: 'none',
+                zIndex: '2000', overflow: 'hidden'
+            });
             
-            // 垂直視角鎖死防止翻轉 (限制在上下約 85 度)
-            pitchObject.rotation.x = Math.max(-Math.PI / 2.1, Math.min(Math.PI / 2.1, pitchObject.rotation.x));
+            const sweep = document.createElement('div');
+            Object.assign(sweep.style, {
+                width: '100%', height: '100%',
+                background: 'linear-gradient(45deg, rgba(0,255,170,0.2) 0%, transparent 50%)',
+                transformOrigin: '50% 50%', animation: 'radarRotate 2s linear infinite'
+            });
+            
+            const radarStyle = document.createElement('style');
+            radarStyle.innerHTML = `
+                @keyframes radarRotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                .radar-dot { position: absolute; width: 6px; height: 6px; border-radius: 50%; transform: translate(-50%, -50%); }
+                .radar-alpha { background: #0088ff; box-shadow: 0 0 6px #0088ff; }
+                .radar-omega { background: #ff3300; box-shadow: 0 0 6px #ff3300; }
+            `;
+            document.head.appendChild(radarStyle);
+            radar.appendChild(sweep);
+            document.body.appendChild(radar);
         }
-    });
+    }
 
-    // 滑鼠按鍵事件
-    window.addEventListener('mousedown', (e) => {
-        if (document.pointerLockElement !== document.body || !isDeployed) return;
+    function pushKillfeedNotification(attacker, target) {
+        const container = document.getElementById('killfeed-container');
+        if (!container) return;
 
-        if (e.button === 0) {
-            isShooting = true; // 開啟連發開槍開關
-        } else if (e.button === 2) {
-            isAiming = true; // 開鏡瞄準
-        }
-    });
-
-    window.addEventListener('mouseup', (e) => {
-        if (e.button === 0) isShooting = false;
-        if (e.button === 2) isAiming = false;
-    });
-
-    window.addEventListener('contextmenu', e => e.preventDefault());
-}
-
-// =========================================================================
-// 6. 硬核射擊判定、開槍後座力與動態彈道線
-// =========================================================================
-function handleWeaponFiringCycle() {
-    if (!isShooting || !isDeployed) return;
-
-    const now = Date.now();
-    const spec = WEAPON_SPECS[currentWeapon];
-
-    if (now - lastShotTime >= spec.fireRate) {
-        lastShotTime = now;
-
-        // 1. 通知伺服器
-        socket.emit('playerFire');
-
-        // 2. 視覺特效：產生動態槍口火光 (Muzzle Flash)
-        createMuzzleFlash();
-
-        // 3. 物理回饋：施加視覺槍身後座力與鏡頭上揚
-        applyWeaponRecoil(spec);
-
-        // 4. 命中判定：計算彈道偏移 (Spread)
-        const currentSpread = isAiming ? spec.adsSpread : spec.spread;
+        const feed = document.createElement('div');
+        Object.assign(feed.style, {
+            background: 'rgba(15, 20, 30, 0.85)', borderLeft: '4px solid #ffaa00',
+            padding: '6px 12px', color: '#fff', borderRadius: '0 4px 4px 0',
+            display: 'flex', justifyContent: 'space-between', animation: 'fadeInRight 0.2s ease-out'
+        });
+        feed.innerHTML = `<span style="color:#00e5ff">${attacker}</span> <span style="color:#ff3b30">⚔</span> <span style="color:#ffcc00">${target}</span>`;
         
-        if (currentWeapon === "SHOTGUN") {
-            // 散彈槍一次發射 6 發碎彈
-            for (let i = 0; i < 6; i++) {
-                executeSingleRaycastProjectile(currentSpread);
+        container.appendChild(feed);
+        setTimeout(() => {
+            feed.style.animation = 'fadeOutRight 0.3s ease-in';
+            setTimeout(() => feed.remove(), 300);
+        }, 4000);
+    }
+
+    // =====================================================================
+    // 7. 鍵盤滑鼠極速異步核心輸入系統 (INPUT RECEPTOR)
+    // =====================================================================
+    function bindInputSystemEventListeners() {
+        window.addEventListener('keydown', (e) => {
+            inputBuffer[e.code] = true;
+            
+            // 戰術蹲下轉換
+            if (e.code === 'KeyC' && isDeployed) {
+                isCrouching = !isCrouching;
+                PHYSICS_CONFIG.eyeHeight = isCrouching ? 0.9 : 1.6;
             }
-        } else {
-            executeSingleRaycastProjectile(currentSpread);
-        }
-    }
-}
 
-function createMuzzleFlash() {
-    if (!myGunMesh) return;
-    const flash = new THREE.PointLight(0xffcc00, 4, 6);
-    flash.position.set(0, 0.02, -0.35);
-    myGunMesh.add(flash);
-    
-    // 槍身向後位移震撼彈跳
-    myGunMesh.position.z += 0.08;
+            // 核心物理：執行高空彈跳
+            if (e.code === 'Space' && isGrounded && isDeployed) {
+                playerVelocity.y = PHYSICS_CONFIG.jumpStrength;
+                isGrounded = false;
+            }
+        });
 
-    setTimeout(() => {
-        if (myGunMesh) myGunMesh.remove(flash);
-    }, 40);
-}
+        window.addEventListener('keyup', (e) => { inputBuffer[e.code] = false; });
 
-function applyWeaponRecoil(spec) {
-    // 鏡頭微幅上揚後座力
-    pitchObject.rotation.x += spec.recoilY;
-    yawObject.rotation.y += (Math.random() - 0.5) * spec.recoilX;
-}
+        window.addEventListener('mousedown', (e) => {
+            if (document.pointerLockElement !== document.body || !isDeployed) return;
 
-function executeSingleRaycastProjectile(spreadValue) {
-    const raycaster = new THREE.Raycaster();
-    
-    // 計算彈道隨機飄移
-    const screenRayX = (Math.random() - 0.5) * spreadValue;
-    const screenRayY = (Math.random() - 0.5) * spreadValue;
-    
-    raycaster.setFromCamera(new THREE.Vector2(screenRayX, screenRayY), camera);
+            if (e.button === 0) {
+                isShooting = true; // 觸發連發半自動/全自動開火循環
+            } else if (e.button === 2) {
+                isAiming = true;   // 右鍵 ADS 舉槍機械瞄準狀態
+            }
+        });
 
-    // 建立雷射彈道光束線軌跡 (Laser Bullet Trail)
-    const origin = new THREE.Vector3();
-    camera.getWorldPosition(origin);
-    
-    // 槍口稍微向下向右偏置，讓彈道看起來是從槍口射出
-    origin.x += 0.1; 
-    origin.y -= 0.1;
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 0) isShooting = false;
+            if (e.button === 2) isAiming = false;
+        });
 
-    const targetPos = new THREE.Vector3();
-    const rayDir = raycaster.ray.direction.clone().multiplyScalar(100);
-    targetPos.addVectors(origin, rayDir);
+        // 二維滑鼠差值微分演算法轉換為 FPS 三維相機 Pitch/Yaw 旋轉角
+        window.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement === document.body) {
+                // 如果正處於機械開鏡開鏡狀態，滑鼠阻尼係數拉高，調低動態靈敏度
+                const dynamicSensitivity = isAiming ? 0.0009 : 0.0022;
+                
+                yawObject.rotation.y -= e.movementX * dynamicSensitivity;
+                pitchObject.rotation.x -= e.movementY * dynamicSensitivity;
+                
+                // 上下看極限仰俯角限制防穿透 (約正負 86 度)
+                pitchObject.rotation.x = Math.max(-Math.PI / 2.08, Math.min(Math.PI / 2.08, pitchObject.rotation.x));
+            }
+        });
 
-    // 取得所有遠端玩家
-    const targetMeshes = [];
-    for (let id in remotePlayers) {
-        if (remotePlayers[id].mesh) targetMeshes.push(remotePlayers[id].mesh);
-    }
-
-    const intersects = raycaster.intersectObjects(targetMeshes, true);
-    
-    if (intersects.length > 0) {
-        targetPos.copy(intersects[0].point);
-        
-        // 解析擊中對象的 Player ID
-        let rootObj = intersects[0].object;
-        while (rootObj.parent && !rootObj.userData.playerId) {
-            rootObj = rootObj.parent;
-        }
-        
-        const hitId = rootObj.userData.playerId;
-        if (hitId) {
-            socket.emit('playerShot', hitId);
-            showHitMarkerUI(); // 顯示命中紅十字
-        }
-    }
-
-    // 繪製 3D 彈道軌跡線
-    drawLaserTrailMesh(origin, targetPos);
-}
-
-function drawLaserTrailMesh(start, end) {
-    const points = [start, end];
-    const trailGeo = new THREE.BufferGeometry().setFromPoints(points);
-    const trailMat = new THREE.LineBasicMaterial({ 
-        color: currentWeapon === "SNIPER" ? 0xff0055 : 0xffaa00,
-        transparent: true,
-        opacity: 0.8
-    });
-    const trail = new THREE.Line(trailGeo, trailMat);
-    scene.add(trail);
-    bulletTrails.push({ mesh: trail, spawnTime: Date.now() });
-}
-
-function showHitMarkerUI() {
-    const marker = document.createElement('div');
-    marker.className = 'hit-marker';
-    document.body.appendChild(marker);
-    setTimeout(() => marker.remove(), 120);
-}
-
-// =========================================================================
-// 7. 核心物理引擎、運動模擬與平滑渲染過渡 (Lerp)
-// =========================================================================
-function animate() {
-    requestAnimationFrame(animate);
-
-    const now = Date.now();
-
-    if (isDeployed) {
-        // 1. 定期開槍循環
-        handleWeaponFiringCycle();
-
-        // 2. 移動矩陣計算
-        let moveX = 0;
-        let moveZ = 0;
-        if (keys['KeyW']) moveZ -= 1;
-        if (keys['KeyS']) moveZ += 1;
-        if (keys['KeyA']) moveX -= 1;
-        if (keys['KeyD']) moveX += 1;
-
-        const dir = new THREE.Vector3(moveX, 0, moveZ).normalize();
-        dir.applyQuaternion(yawObject.quaternion);
-
-        // 檢查是否按下 Shift 疾跑
-        const currentSpeedMultiplier = keys['ShiftLeft'] ? sprintMultiplier : 1.0;
-        
-        yawObject.position.x += dir.x * moveSpeed * currentSpeedMultiplier;
-        yawObject.position.z += dir.z * moveSpeed * currentSpeedMultiplier;
-
-        // 3. 處理重力與跳躍高度物理
-        playerVelocity.y += gravity;
-        yawObject.position.y += playerVelocity.y;
-
-        // 地面精準阻擋
-        if (yawObject.position.y <= 1.6) {
-            yawObject.position.y = 1.6;
-            playerVelocity.y = 0;
-            isGrounded = true;
-        }
-
-        // 4. 【高階視覺修復】開鏡瞄準舉槍平滑動畫 (Lerp)
-        if (myGunMesh) {
-            const spec = WEAPON_SPECS[currentWeapon];
-            const target = isAiming ? spec.adsPos : spec.hipPos;
-
-            // 位置線性插值平滑過渡
-            myGunMesh.position.x += (target.x - myGunMesh.position.x) * 0.25;
-            myGunMesh.position.y += (target.y - myGunMesh.position.y) * 0.25;
-            myGunMesh.position.z += (target.z - myGunMesh.position.z) * 0.25;
-
-            // 旋轉線性插值平滑過渡 (帶側向傾斜防呆)
-            myGunMesh.rotation.x += (target.rx - myGunMesh.rotation.x) * 0.25;
-            myGunMesh.rotation.y += (target.ry - myGunMesh.rotation.y) * 0.25;
-            myGunMesh.rotation.z += (target.rz - myGunMesh.rotation.z) * 0.25;
-
-            // 動態拉近相機視野矩陣 (FOV Zoom Effect)
-            const targetFOV = isAiming ? (currentWeapon === "SNIPER" ? 20 : 48) : 75;
-            camera.fov += (targetFOV - camera.fov) * 0.2;
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
-
-            // 準星動態縮放回饋
-            const crosshair = document.getElementById('game-crosshair');
-            if (crosshair) {
-                crosshair.style.transform = `translate(-50%, -50%) scale(${isAiming ? 0.4 : 1.0})`;
-            }
-        }
-
-        // 5. 即時回報位置數據給 Node 伺服器
-        socket.emit('playerUpdate', {
-            x: yawObject.position.x,
-            y: yawObject.position.y,
-            z: yawObject.position.z,
-            ry: yawObject.rotation.y
+            renderer.setSize(window.innerWidth, window.innerHeight);
         });
     }
 
-    // 6. 清理與淡出過期的雷射子彈彈道線
-    for (let i = bulletTrails.length - 1; i >= 0; i--) {
-        if (now - bulletTrails[i].spawnTime > 200) { // 彈道線存活 0.2 秒
-            scene.remove(bulletTrails[i].mesh);
-            bulletTrails.splice(i, 1);
+    // =====================================================================
+    // 8. 硬核 AABB 立體封閉射線碰撞演算法模組 (CUSTOM RUNTIME COLLISION ENGINE)
+    // =====================================================================
+    function executeAABBMovementCollisionDetection(oldPos) {
+        // 建造玩家當前的立體包圍盒 (Bounding Box)
+        const pRadius = PHYSICS_CONFIG.playerRadius;
+        const pHeight = PHYSICS_CONFIG.playerHeight;
+        
+        // 計算玩家的腳底位置
+        const footY = yawObject.position.y - PHYSICS_CONFIG.eyeHeight;
+
+        const playerBox = new THREE.Box3(
+            new THREE.Vector3(yawObject.position.x - pRadius, footY, yawObject.position.z - pRadius),
+            new THREE.Vector3(yawObject.position.x + pRadius, footY + pHeight, yawObject.position.z + pRadius)
+        );
+
+        let hitAnyObstacleFloor = false;
+
+        for (let i = 0; i < obstacles.length; i++) {
+            const obsBox = new THREE.Box3().setFromObject(obstacles[i]);
+            
+            if (playerBox.intersectsBox(obsBox)) {
+                // 1. 垂直落腳踩踏判定 (Vertical Step/Platform Collision)
+                const previousFootY = oldPos.y - PHYSICS_CONFIG.eyeHeight;
+                if (previousFootY >= obsBox.max.y - 0.25 && playerVelocity.y <= 0) {
+                    yawObject.position.y = obsBox.max.y + PHYSICS_CONFIG.eyeHeight;
+                    playerVelocity.y = 0;
+                    hitAnyObstacleFloor = true;
+                    isGrounded = true;
+                    continue;
+                }
+
+                // 2. 水平 X-Z 軸物理排擠回彈演算法 (Horizontal Push-back)
+                const overlapX = Math.min(playerBox.max.x - obsBox.min.x, obsBox.max.x - playerBox.min.x);
+                const overlapZ = Math.min(playerBox.max.z - obsBox.min.z, obsBox.max.z - playerBox.min.z);
+
+                if (overlapX < overlapZ) {
+                    yawObject.position.x = (yawObject.position.x > (obsBox.min.x + obsBox.max.x) / 2) ? obsBox.max.x + pRadius : obsBox.min.x - pRadius;
+                } else {
+                    yawObject.position.z = (yawObject.position.z > (obsBox.min.z + obsBox.max.z) / 2) ? obsBox.max.z + pRadius : obsBox.min.z - pRadius;
+                }
+                
+                // 重新計算包圍盒以利下一輪迴圈精準剔除
+                const updatedFootY = yawObject.position.y - PHYSICS_CONFIG.eyeHeight;
+                playerBox.set(
+                    new THREE.Vector3(yawObject.position.x - pRadius, updatedFootY, yawObject.position.z - pRadius),
+                    new THREE.Vector3(yawObject.position.x + pRadius, updatedFootY + pHeight, yawObject.position.z + pRadius)
+                );
+            }
+        }
+
+        // 如果沒有踩在任何實體方塊平台上，判定是否落回無限大地板
+        if (!hitAnyObstacleFloor) {
+            if (yawObject.position.y <= PHYSICS_CONFIG.eyeHeight) {
+                yawObject.position.y = PHYSICS_CONFIG.eyeHeight;
+                playerVelocity.y = 0;
+                isGrounded = true;
+            } else {
+                isGrounded = false;
+            }
         }
     }
 
-    // 旋轉中央空投物件
-    if (weaponDropMesh) {
-        weaponDropMesh.rotation.y += 0.02;
-        weaponDropMesh.position.y = 1.0 + Math.sin(now * 0.003) * 0.1; // 懸浮飄浮動效
-    }
+    // =====================================================================
+    // 9. 射擊彈道幾何物理散佈與粒子特效模組 (BALLISTICS & PARTICLE EMITTER)
+    // =====================================================================
+    function triggerWeaponFiringProcess() {
+        if (!isShooting || !isDeployed) return;
 
-    renderer.render(scene, camera);
-}
+        const now = Date.now();
+        const spec = WEAPON_DATABASE[currentWeapon];
 
-// =========================================================================
-// 8. Socket.io 網路封包監聽與多玩家狀態機同步
-// =========================================================================
-socket.on('init', (data) => {
-    myId = data.id;
-    myTeam = data.team;
-    
-    const teamSpan = document.getElementById('hud-team');
-    if (teamSpan) teamSpan.innerText = myTeam;
+        if (now - lastShotTime >= spec.fireRate) {
+            lastShotTime = now;
 
-    // 清空舊障礙物
-    obstacles.forEach(o => scene.remove(o));
-    obstacles.length = 0;
+            // 廣播至 Node 伺服器
+            socket.emit('playerFire');
 
-    // 建構地圖障礙物
-    data.obstacles.forEach(obs => {
-        const obsGeo = new THREE.BoxGeometry(obs.w, obs.h, obs.d);
-        const obsMat = new THREE.MeshStandardMaterial({ color: obs.color, roughness: 0.5 });
-        const mesh = new THREE.Mesh(obsGeo, obsMat);
-        mesh.position.set(obs.x, obs.y, obs.z);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        scene.add(mesh);
-        obstacles.push(mesh);
-    });
+            // 1. 動態後座力與視覺震撼偏移量演算
+            pitchObject.rotation.x += spec.recoilY;
+            yawObject.rotation.y += (Math.random() - 0.5) * spec.recoilX;
 
-    // 渲染已存在的其他遠端特務
-    for (let id in data.playerList) {
-        if (id !== myId && data.playerList[id].isDeployed) {
-            createRemotePlayerMesh(id, data.playerList[id]);
+            // 2. 第一人稱模型劇烈後座力位移
+            if (myGunMesh) myGunMesh.position.z += 0.085;
+
+            // 3. 槍口動態點光源火光閃爍
+            spawnMuzzleFlashDynamicLight();
+
+            // 4. 根據腰射或開鏡計算高階散佈
+            const activeSpread = isAiming ? spec.adsSpread : spec.spread;
+
+            if (currentWeapon === "SHOTGUN") {
+                // 散彈槍單次爆發 8 發獨立碎彈線
+                for (let s = 0; s < 8; s++) {
+                    castDynamicProjectileRay(activeSpread);
+                }
+            } else {
+                castDynamicProjectileRay(activeSpread);
+            }
         }
     }
-});
 
-socket.on('playerRespawn', (data) => {
-    if (data.id === myId) {
-        isDeployed = true;
-        yawObject.position.set(data.info.x, data.info.y, data.info.z);
-        yawObject.rotation.set(0, data.info.ry, 0);
-        pitchObject.rotation.set(0, 0, 0);
+    function spawnMuzzleFlashDynamicLight() {
+        const flash = new THREE.PointLight(0xff9900, 3.5, 6);
+        flash.position.set(0, 0.02, -0.38);
+        myGunMesh.add(flash);
+        setTimeout(() => { if (myGunMesh) myGunMesh.remove(flash); }, 35);
+    }
+
+    function castDynamicProjectileRay(spreadValue) {
+        const raycaster = new THREE.Raycaster();
         
-        equipWeaponMesh(currentWeapon);
+        // 高階高斯彈道擴散偏置矩陣
+        const spreadX = (Math.random() - 0.5) * spreadValue;
+        const spreadY = (Math.random() - 0.5) * spreadValue;
         
-        const menu = document.getElementById('weapon-menu');
-        if (menu) menu.style.display = 'none';
-        document.body.requestPointerLock();
-    } else {
-        createRemotePlayerMesh(data.id, data.info);
+        raycaster.setFromCamera(new THREE.Vector2(spreadX, spreadY), camera);
+
+        const camWorldPos = new THREE.Vector3();
+        camera.getWorldPosition(camWorldPos);
+
+        // 微調起點讓雷射光束精準由槍口噴發
+        const laserOrigin = camWorldPos.clone();
+        laserOrigin.x += 0.08; laserOrigin.y -= 0.1;
+
+        const laserEndpoint = new THREE.Vector3();
+        const maxRangeVector = raycaster.ray.direction.clone().multiplyScalar(120);
+        laserEndpoint.addVectors(camWorldPos, maxRangeVector);
+
+        // 收集潛在敵方特務碰撞靶
+        const enemyTargets = [];
+        for (let id in remotePlayers) {
+            if (remotePlayers[id].mesh) enemyTargets.push(remotePlayers[id].mesh);
+        }
+
+        const sceneHits = raycaster.intersectObjects(enemyTargets, true);
+
+        if (sceneHits.length > 0) {
+            laserEndpoint.copy(sceneHits[0].point);
+            
+            // 解碼溯源被擊中 Mesh 的特務 ID
+            let rootNode = sceneHits[0].object;
+            while (rootNode.parent && !rootNode.userData.playerId) {
+                rootNode = rootNode.parent;
+            }
+
+            const enemyId = rootNode.userData.playerId;
+            if (enemyId) {
+                socket.emit('playerShot', enemyId);
+                triggerUIHitmarkerFeedback();
+            }
+            
+            // 在撞擊點噴發火花粒子碎屑
+            spawnImpactParticles(sceneHits[0].point, sceneHits[0].face.normal);
+        }
+
+        // 3D 空間渲染雷射彈道光束線
+        generateLaserTrail3DLine(laserOrigin, laserEndpoint);
     }
-});
 
-socket.on('playerMoved', (data) => {
-    if (remotePlayers[data.id]) {
-        remotePlayers[data.id].mesh.position.set(data.info.x, data.info.y, data.info.z);
-        remotePlayers[data.id].mesh.rotation.y = data.info.ry;
+    function generateLaserTrail3DLine(start, end) {
+        const geo = new THREE.BufferGeometry().setFromPoints([start, end]);
+        const mat = new THREE.LineBasicMaterial({
+            color: currentWeapon === "SNIPER" ? 0xff0055 : 0xffcc33,
+            transparent: true, opacity: 0.75
+        });
+        const line = new THREE.Line(geo, mat);
+        scene.add(line);
+        bulletTrails.push({ mesh: line, creationTime: Date.now() });
     }
-});
 
-socket.on('playerHurt', (data) => {
-    if (data.id === myId) {
-        // 更新我自己的血條 HUD
-        const hpText = document.getElementById('hud-hp');
-        const hpBar = document.getElementById('hp-bar');
-        if (hpText) hpText.innerText = data.hp;
-        if (hpBar) hpBar.style.width = `${data.hp}%`;
+    function spawnImpactParticles(pos, normal) {
+        const particleCount = 6;
+        const geometry = new THREE.BoxGeometry(0.03, 0.03, 0.03);
+        const material = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+        const meshes = [];
+
+        for (let i = 0; i < particleCount; i++) {
+            const p = new THREE.Mesh(geometry, material);
+            p.position.copy(pos);
+            
+            // 給予物理噴發初速度向量
+            p.userData = {
+                velocity: new THREE.Vector3(
+                    normal.x * 2 + (Math.random() - 0.5) * 2,
+                    normal.y * 2 + Math.random() * 2,
+                    normal.z * 2 + (Math.random() - 0.5) * 2
+                ).multiplyScalar(0.03),
+                age: 0
+            };
+            scene.add(p);
+            meshes.push(p);
+        }
+        particleSystems.push(meshes);
     }
-});
 
-socket.on('remoteFire', (attackerId) => {
-    if (remotePlayers[attackerId]) {
-        // 渲染遠端玩家開槍火焰
-        const flashGeo = new THREE.PointLight(0xff9900, 3, 4);
-        flashGeo.position.set(0, 0.2, -0.6);
-        remotePlayers[attackerId].mesh.add(flashGeo);
-        setTimeout(() => {
-            if (remotePlayers[attackerId]) remotePlayers[attackerId].mesh.remove(flashGeo);
-        }, 50);
+    function triggerUIHitmarkerFeedback() {
+        const hm = document.createElement('div');
+        hm.className = 'hit-marker';
+        Object.assign(hm.style, {
+            position: 'absolute', top: '50%', left: '50%',
+            width: '24px', height: '24px', transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none', zIndex: '2001'
+        });
+        hm.innerHTML = `
+            <div style="position:absolute; top:0; left:0; width:2px; height:8px; background:red; transform:rotate(45deg); transform-origin:top left;"></div>
+            <div style="position:absolute; top:0; right:0; width:2px; height:8px; background:red; transform:rotate(-45deg); transform-origin:top right;"></div>
+            <div style="position:absolute; bottom:0; left:0; width:2px; height:8px; background:red; transform:rotate(-45deg); transform-origin:bottom left;"></div>
+            <div style="position:absolute; bottom:0; right:0; width:2px; height:8px; background:red; transform:rotate(45deg); transform-origin:bottom right;"></div>
+        `;
+        document.body.appendChild(hm);
+        setTimeout(() => hm.remove(), 110);
     }
-});
 
-socket.on('playerDead', (data) => {
-    if (data.id === myId) {
-        isDeployed = false;
-        document.exitPointerLock();
-        const menu = document.getElementById('weapon-menu');
-        if (menu) menu.style.display = 'block';
-    } else if (remotePlayers[data.id]) {
-        scene.remove(remotePlayers[data.id].mesh);
-        delete remotePlayers[data.id];
+    // =====================================================================
+    // 10. 全功能核心渲染與物理運算雙循環引擎 (MAIN ENGINE TICK LOOP)
+    // =====================================================================
+    function executeMainRenderLoop() {
+        requestAnimationFrame(executeMainRenderLoop);
+
+        const timestampNow = Date.now();
+        const oldPlayerPosition = yawObject.position.clone();
+
+        if (isDeployed) {
+            // 1. 每一個 Tick 自動執行開火速率判定
+            triggerWeaponFiringProcess();
+
+            // 2. 鍵盤輸入緩衝解算移動向量矩陣
+            let inputDirX = 0;
+            let inputDirZ = 0;
+
+            if (inputBuffer['KeyW']) inputDirZ -= 1;
+            if (inputBuffer['KeyS']) inputDirZ += 1;
+            if (inputBuffer['KeyA']) inputDirX -= 1;
+            if (inputBuffer['KeyD']) inputDirX += 1;
+
+            const movementVector = new THREE.Vector3(inputDirX, 0, inputDirZ).normalize();
+            movementVector.applyQuaternion(yawObject.quaternion);
+
+            // 計算動態速率加權 (疾跑 / 蹲下狀態衰減)
+            let velocityModifier = 1.0;
+            if (inputBuffer['ShiftLeft'] && !isAiming && inputDirZ < 0) {
+                isSprinting = true;
+                velocityModifier = PHYSICS_CONFIG.sprintMultiplier;
+            } else {
+                isSprinting = false;
+                if (isCrouching) velocityModifier = PHYSICS_CONFIG.crouchMultiplier;
+            }
+
+            yawObject.position.x += movementVector.x * PHYSICS_CONFIG.moveSpeed * velocityModifier;
+            yawObject.position.z += movementVector.z * PHYSICS_CONFIG.moveSpeed * velocityModifier;
+
+            // 3. 處理重力落體物理加速度
+            playerVelocity.y += PHYSICS_CONFIG.gravity;
+            yawObject.position.y += playerVelocity.y;
+
+            // 4. 執行客製化封閉式 AABB 碰撞阻擋迴圈
+            executeAABBMovementCollisionDetection(oldPlayerPosition);
+
+            // 5. 【高階第一人稱平滑矩陣變換】開鏡瞄準舉槍 (Lerp)
+            if (myGunMesh) {
+                const spec = WEAPON_DATABASE[currentWeapon];
+                
+                // 根據開鏡狀態選擇目標變換空間矩陣
+                const targetTransform = isAiming ? spec.adsTransform : spec.hipTransform;
+
+                // 槍身平滑線性差值 Lerp 過渡 (0.24 彈性速率)
+                myGunMesh.position.x += (targetTransform.x - myGunMesh.position.x) * 0.24;
+                myGunMesh.position.y += (targetTransform.y - myGunMesh.position.y) * 0.24;
+                myGunMesh.position.z += (targetTransform.z - myGunMesh.position.z) * 0.24;
+
+                myGunMesh.rotation.x += (targetTransform.rx - myGunMesh.rotation.x) * 0.24;
+                myGunMesh.rotation.y += (targetTransform.ry - myGunMesh.rotation.y) * 0.24;
+                myGunMesh.rotation.z += (targetTransform.rz - myGunMesh.rotation.z) * 0.24;
+
+                // 開鏡後座力恢復演算 (Recoil Recovery)
+                pitchObject.rotation.x += (0 - pitchObject.rotation.x) * spec.recoilRecovery;
+
+                // 相機 FOV 鏡頭縮放平滑轉化
+                const targetCameraFOV = isAiming ? spec.zoomFOV : 75;
+                camera.fov += (targetCameraFOV - camera.fov) * 0.22;
+                camera.updateProjectionMatrix();
+
+                // 2D 螢幕中心十字準星動態隨移動狀態與瞄準縮放
+                const ch = document.getElementById('game-crosshair');
+                if (ch) {
+                    let crosshairScale = isAiming ? 0.35 : 1.0;
+                    if (movementVector.lengthSq() > 0) crosshairScale *= 1.3; // 移動時準星擴大
+                    ch.style.transform = `translate(-50%, -50%) scale(${crosshairScale})`;
+                }
+            }
+
+            // 6. 即時封包打包上傳網路伺服器
+            socket.emit('playerUpdate', {
+                x: yawObject.position.x,
+                y: yawObject.position.y,
+                z: yawObject.position.z,
+                ry: yawObject.rotation.y
+            });
+        }
+
+        // 7. 特效回收清理核心線程 (GC Effects)
+        for (let i = bulletTrails.length - 1; i >= 0; i--) {
+            if (timestampNow - bulletTrails[i].creationTime > 160) {
+                scene.remove(bulletTrails[i].mesh);
+                bulletTrails.splice(i, 1);
+            }
+        }
+
+        // 火花粒子彈跳與淡出物理演算
+        for (let i = particleSystems.length - 1; i >= 0; i--) {
+            const meshes = particleSystems[i];
+            let allDead = true;
+
+            meshes.forEach(p => {
+                p.position.add(p.userData.velocity);
+                p.userData.velocity.y += -0.05; // 碎屑微重力
+                p.userData.age += 1;
+                if (p.userData.age > 25) {
+                    scene.remove(p);
+                } else {
+                    allDead = false;
+                }
+            });
+
+            if (allDead) particleSystems.splice(i, 1);
+        }
+
+        // 戰術空投黃金方塊動態漂浮旋轉
+        if (weaponDropMesh) {
+            weaponDropMesh.rotation.y += 0.016;
+            weaponDropMesh.position.y = 1.1 + Math.sin(timestampNow * 0.0025) * 0.12;
+        }
+
+        // 即時戰術小地圖/雷達同位映射渲染
+        updateTacticalRadarCoordinates();
+
+        renderer.render(scene, camera);
     }
-});
 
-socket.on('spawnWeaponDrop', (data) => {
-    if (weaponDropMesh) scene.remove(weaponDropMesh);
+    // =====================================================================
+    // 11. 戰術雷達與同位投影模組 (TACTICAL RADAR RADIAL PROJECTION)
+    // =====================================================================
+    function updateTacticalRadarCoordinates() {
+        const radar = document.getElementById('tactical-radar');
+        if (!radar || !isDeployed) return;
 
-    const dropGroup = new THREE.Group();
-    const platformGeo = new THREE.BoxGeometry(2, 0.4, 2);
-    const goldMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.9, roughness: 0.1 });
-    const platform = new THREE.Mesh(platformGeo, goldMat);
-    dropGroup.add(platform);
+        // 清空既有舊點標籤
+        const legacyDots = radar.querySelectorAll('.radar-dot');
+        legacyDots.forEach(d => d.remove());
 
-    // 在平台上放置黃金槍支裝飾
-    const gunBonus = createVisualWeapon("SNIPER");
-    gunBonus.position.y = 0.3;
-    gunBonus.scale.set(2, 2, 2);
-    dropGroup.add(gunBonus);
+        const centerPos = yawObject.position;
+        const radarScale = 1.4; // 縮放級別控制半徑視野
 
-    dropGroup.position.set(data.x, 1.2, data.z); // 下調 Y 軸高度，確保跳躍力增強後完美踩踏拾取
-    scene.add(dropGroup);
-    weaponDropMesh = dropGroup;
-});
+        for (let id in remotePlayers) {
+            const rp = remotePlayers[id];
+            if (!rp.mesh) continue;
 
-socket.on('weaponPickedUp', () => {
-    if (weaponDropMesh) {
-        scene.remove(weaponDropMesh);
-        weaponDropMesh = null;
+            const dx = rp.mesh.position.x - centerPos.x;
+            const dz = rp.mesh.position.z - centerPos.z;
+
+            // 計算二維極坐標半徑
+            const distance = Math.sqrt(dx * dx + dz * dz);
+            if (distance < 45) { // 超過 45 米不顯示於雷達
+                const dot = document.createElement('div');
+                dot.className = `radar-dot ${rp.info.team === myTeam ? 'radar-alpha' : 'radar-omega'}`;
+                
+                // 相對映射坐標轉為百分比定位
+                const leftPercent = 50 + (dx * radarScale);
+                const topPercent = 50 + (dz * radarScale);
+                
+                Object.assign(dot.style, {
+                    left: `${Math.max(5, Math.min(95, leftPercent))}%`,
+                    top: `${Math.max(5, Math.min(95, topPercent))}%`
+                });
+                radar.appendChild(dot);
+            }
+        }
     }
-});
 
-socket.on('playerLeft', (id) => {
-    if (remotePlayers[id]) {
-        scene.remove(remotePlayers[id].mesh);
-        delete remotePlayers[id];
-    }
-});
+    // =====================================================================
+    // 12. SOCKET.IO 全球廣播網路事件接收接聽模組 (NETWORK NETWORK SYNC)
+    // =====================================================================
+    socket.on('init', (data) => {
+        myId = data.id;
+        myTeam = data.team;
+        
+        const tSpan = document.getElementById('hud-team');
+        if (tSpan) tSpan.innerText = myTeam;
 
-// =========================================================================
-// 9. 網格輔助生成函數組
-// =========================================================================
-function createRemotePlayerMesh(id, info) {
-    if (remotePlayers[id]) scene.remove(remotePlayers[id].mesh);
+        // 伺服器同步清除並全面重建靜態碰撞體
+        obstacles.forEach(o => scene.remove(o));
+        obstacles.length = 0;
 
-    const playerGroup = new THREE.Group();
-    playerGroup.userData = { playerId: id };
+        data.obstacles.forEach(obs => {
+            const obsGeo = new THREE.BoxGeometry(obs.w, obs.h, obs.d);
+            const obsMat = new THREE.MeshStandardMaterial({ color: obs.color, roughness: 0.45 });
+            const mesh = new THREE.Mesh(obsGeo, obsMat);
+            mesh.position.set(obs.x, obs.y, obs.z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+            obstacles.push(mesh);
+        });
 
-    // 膠囊形特務身體
-    const bodyGeo = new THREE.CylinderGeometry(0.35, 0.35, 1.8, 16);
-    const bodyMat = new THREE.MeshStandardMaterial({ 
-        color: info.team === "ALPHA" ? 0x0066ff : 0xff2233,
-        roughness: 0.4 
+        // 建立遠端同場特務
+        for (let id in data.playerList) {
+            if (id !== myId && data.playerList[id].isDeployed) {
+                spawnRemoteAgentMeshInScene(id, data.playerList[id]);
+            }
+        }
     });
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.9;
-    body.castShadow = true;
-    playerGroup.add(body);
 
-    // 加上面向護木頭部，方便辨識轉向
-    const headGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-    const headMat = new THREE.MeshStandardMaterial({ color: 0xdddddd });
-    const head = new THREE.Mesh(headGeo, headMat);
-    head.position.set(0, 1.6, -0.1);
-    playerGroup.add(head);
+    socket.on('playerRespawn', (data) => {
+        if (data.id === myId) {
+            isDeployed = true;
+            yawObject.position.set(data.info.x, data.info.y, data.info.z);
+            yawObject.rotation.set(0, data.info.ry, 0);
+            pitchObject.rotation.set(0, 0, 0);
+            playerVelocity.y = 0;
+            
+            syncActiveWeaponTransformMesh(currentWeapon);
+            
+            toggleUIElement('weapon-menu', false);
+            document.body.requestPointerLock();
+        } else {
+            spawnRemoteAgentMeshInScene(data.id, data.info);
+        }
+    });
 
-    playerGroup.position.set(info.x, info.y - 1.6, info.z); // 修正對齊底座坐標
-    playerGroup.rotation.y = info.ry;
-    scene.add(playerGroup);
+    socket.on('playerMoved', (data) => {
+        if (remotePlayers[data.id]) {
+            remotePlayers[data.id].mesh.position.set(data.info.x, data.info.y - PHYSICS_CONFIG.eyeHeight, data.info.z);
+            remotePlayers[data.id].mesh.rotation.y = data.info.ry;
+        }
+    });
 
-    remotePlayers[id] = { mesh: playerGroup, info: info };
-}
+    socket.on('playerHurt', (data) => {
+        if (data.id === myId) {
+            const t = document.getElementById('hud-hp');
+            const b = document.getElementById('hp-bar');
+            if (t) t.innerText = data.hp;
+            if (b) b.style.width = `${data.hp}%`;
+        }
+    });
 
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-}
+    socket.on('remoteFire', (attackerId) => {
+        if (remotePlayers[attackerId]) {
+            const rFlash = new THREE.PointLight(0xff6600, 3, 5);
+            rFlash.position.set(0, 0.8, -0.6);
+            remotePlayers[attackerId].mesh.add(rFlash);
+            setTimeout(() => { if (remotePlayers[attackerId]) remotePlayers[attackerId].mesh.remove(rFlash); }, 45);
+        }
+    });
 
-// 供前端 UI Button 直接點擊呼叫的全局掛載函數
-window.deployAgent = function(weaponType) {
-    currentWeapon = weaponType;
-    socket.emit('selectWeaponAndDeploy', { weapon: weaponType });
-};
+    socket.on('killFeed', (data) => {
+        pushKillfeedNotification(data.attackerName, data.targetName);
+    });
 
-window.joinQueue = function() {
-    const nameInput = document.getElementById('player-name');
-    const name = nameInput ? nameInput.value : "Agent";
-    initGame();
-    socket.emit('joinRoom', { roomId: "MAIN_ARENA", name: name });
-};
+    socket.on('playerDead', (data) => {
+        if (data.id === myId) {
+            isDeployed = false;
+            isShooting = false;
+            isAiming = false;
+            document.exitPointerLock();
+            toggleUIElement('weapon-menu', true);
+        } else if (remotePlayers[data.id]) {
+            scene.remove(remotePlayers[data.id].mesh);
+            delete remotePlayers[data.id];
+        }
+    });
+
+    socket.on('spawnWeaponDrop', (data) => {
+        if (weaponDropMesh) {
+            scene.remove(weaponDropMesh);
+            const index = obstacles.indexOf(weaponDropMesh.userData.collisionBoxMesh);
+            if (index > -1) obstacles.splice(index, 1);
+        }
+
+        const dropGroup = new THREE.Group();
+        
+        // 🛠️ 最佳化合理尺寸平台：寬 3, 厚 0.5, 深 3 (面積加大，保證輕鬆跳上踩踏)
+        const platGeo = new THREE.BoxGeometry(3, 0.5, 3);
+        const goldMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.85, roughness: 0.1 });
+        const platform = new THREE.Mesh(platGeo, goldMat);
+        platform.castShadow = true;
+        platform.receiveShadow = true;
+        dropGroup.add(platform);
+
+        // 平台頂部生成懸浮展示狙擊槍
+        const gunBonus = craftTactical3DWeapon("SNIPER");
+        gunBonus.position.y = 0.4;
+        gunBonus.scale.set(1.4, 1.4, 1.4);
+        dropGroup.add(gunBonus);
+
+        // 設定合理中心 Y=1.2。頂部表面在 Y=1.45。跳躍高度 Y=1.62 可隨意完美站立！
+        dropGroup.position.set(data.x, 1.2, data.z);
+        scene.add(dropGroup);
+        
+        dropGroup.userData = { collisionBoxMesh: platform };
+        obstacles.push(platform); // 塞入實體障礙物陣列，賦予踩踏物理碰撞體
+        
+        weaponDropMesh = dropGroup;
+    });
+
+    socket.on('weaponPickedUp', () => {
+        if (weaponDropMesh) {
+            const index = obstacles.indexOf(weaponDropMesh.userData.collisionBoxMesh);
+            if (index > -1) obstacles.splice(index, 1);
+            
+            scene.remove(weaponDropMesh);
+            weaponDropMesh = null;
+        }
+    });
+
+    socket.on('playerLeft', (id) => {
+        if (remotePlayers[id]) {
+            scene.remove(remotePlayers[id].mesh);
+            delete remotePlayers[id];
+        }
+    });
+
+    // =====================================================================
+    // 13. 遠端特務立體模型組裝函數組 (REMOTE CHARACTER FACTORY)
+    // =====================================================================
+    function spawnRemoteAgentMeshInScene(id, info) {
+        if (remotePlayers[id]) scene.remove(remotePlayers[id].mesh);
+
+        const group = new THREE.Group();
+        group.userData = { playerId: id };
+
+        // 身體主結構
+        const bodyGeo = new THREE.CylinderGeometry(0.35, 0.35, 1.8, 12);
+        const bodyMat = new THREE.MeshStandardMaterial({
+            color: info.team === "ALPHA" ? 0x0066ff : 0xff2233, roughness: 0.4
+        });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 0.9;
+        body.castShadow = true;
+        body.receiveShadow = true;
+        group.add(body);
+
+        // 面向方塊頭部
+        const headGeo = new THREE.BoxGeometry(0.32, 0.32, 0.32);
+        const headMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0 });
+        const head = new THREE.Mesh(headGeo, headMat);
+        head.position.set(0, 1.62, -0.05);
+        group.add(head);
+
+        // 對齊物理基準點
+        group.position.set(info.x, info.y - PHYSICS_CONFIG.eyeHeight, info.z);
+        group.rotation.y = info.ry;
+        scene.add(group);
+
+        remotePlayers[id] = { mesh: group, info: info };
+    }
+
+    // =====================================================================
+    // 14. 網頁全域名稱空間函數綁定 (WINDOW EXPOSURE GLOBAL BRIDGE)
+    // =====================================================================
+    window.deployAgent = function (weaponType) {
+        currentWeapon = weaponType;
+        socket.emit('selectWeaponAndDeploy', { weapon: weaponType });
+    };
+
+    window.joinQueue = function () {
+        const input = document.getElementById('player-name');
+        const nickName = input ? input.value.trim() : "特務 Agent";
+        initializeEngineCore();
+        socket.emit('joinRoom', { roomId: "MAIN_ARENA", name: nickName });
+    };
+
+})();
