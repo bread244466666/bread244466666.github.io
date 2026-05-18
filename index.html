@@ -3,208 +3,210 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cyber Realm 3D - Team Deathmatch</title>
+    <title>CYBER ARENA - MULTIPLAYER FPS</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background-color: #02040a; user-select: none; }
-        
-        /* 準星 */
-        #crosshair {
-            position: absolute; top: 50%; left: 50%;
-            width: 10px; height: 10px;
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            margin: 0;
+            padding: 0;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0a0b10;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: #fff;
+        }
+        /* 1. 初始大廳大廳 UI 面板 */
+        #lobby-ui {
+            position: absolute;
+            top: 50%;
+            left: 50%;
             transform: translate(-50%, -50%);
-            pointer-events: none; z-index: 10;
+            width: 400px;
+            background: rgba(16, 20, 30, 0.9);
+            border: 2px solid #00ffaa;
+            box-shadow: 0 0 20px rgba(0, 255, 170, 0.2);
+            padding: 30px;
+            border-radius: 8px;
+            text-align: center;
+            z-index: 5000;
         }
-        #crosshair::before, #crosshair::after {
-            content: ''; position: absolute; background: #00ffcc;
+        h2 {
+            font-size: 24px;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            color: #00ffaa;
+            text-shadow: 0 0 8px rgba(0,255,170,0.4);
         }
-        #crosshair::before { top: 4px; left: -5px; width: 20px; height: 2px; box-shadow: 0 0 4px #00ffcc; }
-        #crosshair::after { top: -5px; left: 4px; width: 2px; height: 20px; box-shadow: 0 0 4px #00ffcc; }
-
-        /* 命中反饋 */
-        #hitmarker {
-            position: absolute; top: 50%; left: 50%;
-            width: 30px; height: 30px;
-            transform: translate(-50%, -50%) rotate(45deg);
-            border: 2px solid transparent;
-            border-left-color: #ff0055; border-right-color: #ff0055;
-            display: none; pointer-events: none; z-index: 9;
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            background: #1a1f2c;
+            border: 1px solid #3a4454;
+            color: #fff;
+            font-size: 16px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            outline: none;
+            text-align: center;
         }
-
-        /* 遊戲主 HUD */
-        #hud {
-            position: absolute; bottom: 30px; left: 30px;
-            font-family: 'Courier New', Courier, monospace; color: white;
-            z-index: 10; pointer-events: none;
+        input[type="text"]:focus {
+            border-color: #00ffaa;
+            box-shadow: 0 0 8px rgba(0,255,170,0.2);
         }
-        .hud-panel {
-            background: rgba(5, 12, 28, 0.75);
-            border: 1px solid #00ffcc; padding: 15px 25px;
-            border-radius: 6px; box-shadow: 0 0 15px rgba(0,255,204,0.15);
+        button {
+            width: 100%;
+            padding: 14px;
+            background: #00ffaa;
+            border: none;
+            color: #0a0b10;
+            font-size: 16px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
         }
-        #hp-container { width: 200px; height: 12px; background: #222; border-radius: 3px; margin-top: 8px; overflow: hidden; border: 1px solid #ff0055; }
-        #hp-bar { width: 100%; height: 100%; background: linear-gradient(90deg, #ff0055, #ff5500); transition: width 0.1s; }
-        #ammo-text { font-size: 32px; font-weight: bold; color: #00ffcc; text-shadow: 0 0 8px #00ffcc; }
-
-        /* 🏆 團隊比分與計時器面板 (頂部中央) */
-        #match-hud {
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            display: flex; align-items: center; gap: 20px;
-            background: rgba(4, 9, 22, 0.85); border: 2px solid #223e5a;
-            padding: 10px 30px; border-radius: 8px; color: white;
-            font-family: monospace; font-size: 20px; z-index: 10;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        button:hover {
+            background: #00cc88;
+            box-shadow: 0 0 15px rgba(0,255,170,0.4);
         }
-        .team-score { font-size: 28px; font-weight: bold; }
-        #score-alpha { color: #0088ff; text-shadow: 0 0 10px #0088ff; }
-        #score-omega { color: #ff3300; text-shadow: 0 0 10px #ff3300; }
-        #match-timer { font-size: 24px; color: #ffff00; text-shadow: 0 0 8px #ffff00; min-width: 70px; text-align: center; }
-
-        /* 提示字串 */
-        #hit-info { position: absolute; top: 25%; left: 50%; transform: translateX(-50%); font-family: sans-serif; font-size: 20px; color: #00ffcc; text-align: center; text-shadow: 0 0 10px #00ffcc; z-index: 10; pointer-events: none; font-weight: bold; }
-        #reload-prompt { position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%); font-family: monospace; font-size: 18px; color: #ff3300; background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 4px; display: none; z-index: 10; animation: blink 1s infinite; border: 1px solid #ff3300; }
-        @keyframes blink { 50% { opacity: 0; } }
-
-        /* 雷達小地圖 */
-        #radar-container { position: absolute; top: 25px; left: 25px; width: 140px; height: 140px; border-radius: 50%; border: 2px solid #00ffcc; box-shadow: 0 0 15px rgba(0,255,204,0.3); overflow: hidden; z-index: 10; }
-        #radar-canvas { background: transparent; }
-
-        /* 房號與個人隊伍標籤 */
-        #room-display { position: absolute; top: 25px; right: 25px; color: #00ffcc; font-family: monospace; font-size: 14px; font-weight: bold; text-shadow: 0 0 5px #00ffcc; z-index: 10; background: rgba(5,12,28,0.8); padding: 8px 16px; border-radius: 4px; border: 1px solid #223e5a; text-align: right; line-height: 1.5; }
-
-        /* 受擊紅斑指示器 */
-        .dmg-indicator { position: absolute; background: radial-gradient(circle, rgba(255,0,85,0.4) 0%, rgba(255,0,0,0) 70%); opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 5; }
-        #dmg-front  { top: 0; left: 0; width: 100%; height: 25%; background: linear-gradient(to bottom, rgba(255,0,50,0.3), transparent); }
-        #dmg-bottom { bottom: 0; left: 0; width: 100%; height: 25%; background: linear-gradient(to top, rgba(255,0,50,0.3), transparent); }
-        #dmg-left   { top: 0; left: 0; width: 25%; height: 100%; background: linear-gradient(to right, rgba(255,0,50,0.3), transparent); }
-        #dmg-right  { top: 0; right: 0; width: 25%; height: 100%; background: linear-gradient(to left, rgba(255,0,50,0.3), transparent); }
-
-        /* 武器部署介面 */
-        #weapon-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(2,4,10,0.85); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 999; font-family: sans-serif; }
-        .weapon-card-container { display: flex; gap: 25px; margin-top: 30px; }
-        .weapon-btn { background: #050c1e; border: 2px solid #223e5a; color: white; padding: 25px; border-radius: 12px; cursor: pointer; text-align: center; width: 160px; transition: 0.2s; }
-        .weapon-btn:hover { border-color: #00ffcc; box-shadow: 0 0 20px rgba(0,255,204,0.3); transform: translateY(-4px); }
-        .weapon-btn h3 { margin: 0 0 10px 0; color: #00ffcc; }
-        .weapon-btn p { margin: 0; font-size: 12px; color: #88a3b7; line-height: 1.5; }
-
-        /* 🏁 戰局結算蓋板 UI */
-        #victory-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(2,4,10,0.95); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; font-family: monospace; color: white; text-align: center; }
-        #victory-title { font-size: 48px; font-weight: bold; margin-bottom: 20px; letter-spacing: 4px; }
-        #crosshair {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 10px;
-    height: 10px;
-    transform: translate(-50%, -50%);
-    pointer-events: none; /* 讓滑鼠點擊穿透，不影響視角控制 */
-    z-index: 999;        /* 確保準星蓋在 3D 畫面最上方 */
-}
-
-/* 繪製十字準星的橫線與直線 */
-#crosshair::before, #crosshair::after {
-    content: '';
-    position: absolute;
-    background: #00ff00; /* 螢光綠準星，最顯眼 */
-}
-
-/* 橫線 */
-#crosshair::before {
-    top: 4px;
-    left: -5px;
-    width: 20px;
-    height: 2px;
-}
-
-/* 直線 */
-#crosshair::after {
-    top: -5px;
-    left: 4px;
-    width: 2px;
-    height: 20px;
-}
+        /* 2. 戰術武器出擊部署選單 */
+        #weapon-menu {
+            display: none; /* 初始隱藏，加入房間後由 app.js 控制開啟 */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 500px;
+            background: rgba(10, 12, 18, 0.95);
+            border: 2px solid #ffaa00;
+            box-shadow: 0 0 25px rgba(255, 170, 0, 0.25);
+            padding: 30px;
+            border-radius: 6px;
+            z-index: 4000;
+            text-align: center;
+        }
+        .weapon-options {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 20px;
+        }
+        .w-btn {
+            background: #1a1f2c;
+            border: 1px solid #ffaa00;
+            color: #ffaa00;
+            padding: 15px;
+            font-size: 15px;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+        }
+        .w-btn:hover {
+            background: #ffaa00;
+            color: #0a0b10;
+        }
+        /* 3. 第一人稱 HUD 抬頭顯示器 */
+        #game-hud {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            width: 280px;
+            z-index: 1000;
+            font-family: monospace;
+            pointer-events: none;
+        }
+        .hud-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 16px;
+            text-shadow: 1px 1px 2px #000;
+        }
+        #hp-container {
+            width: 100%;
+            height: 100%;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            height: 12px;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        #hp-bar {
+            width: 100%;
+            height: 100%;
+            background: #ff3333;
+            transition: width 0.1s ease;
+        }
+        /* 4. 螢幕中央精密十字準星 */
+        #game-crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 3000;
+        }
+        .ch-line {
+            position: absolute;
+            background: #00ffaa;
+        }
+        .ch-v { width: 2px; height: 8px; left: 9px; }
+        .ch-h { width: 8px; height: 2px; top: 9px; }
+        .ch-t { top: 0; } .ch-b { bottom: 0; } .ch-l { left: 0; } .ch-r { right: 0; }
     </style>
 </head>
 <body>
 
-    <div id="dmg-front" class="dmg-indicator"></div>
-    <div id="dmg-bottom" class="dmg-indicator"></div>
-    <div id="dmg-left" class="dmg-indicator"></div>
-    <div id="dmg-right" class="dmg-indicator"></div>
-
-    <div id="crosshair"></div>
-    <div id="hitmarker"></div>
-    <div id="hit-info"></div>
-    <div id="reload-prompt"></div>
-    
-    <div id="match-hud">
-        <span style="color:#0088ff; font-weight:bold;">ALPHA</span>
-        <span id="score-alpha" class="team-score">0</span>
-        <span id="match-timer">03:00</span>
-        <span id="score-omega" class="team-score">0</span>
-        <span style="color:#ff3300; font-weight:bold;">OMEGA</span>
+    <div id="lobby-ui">
+        <h2>CYBER ARENA</h2>
+        <input type="text" id="player-name" value="Agent_Specter" placeholder="輸入特務代號..." autocomplete="off">
+        <button id="make-room-btn" onclick="joinQueue()">建立 / 加入房間 (Make a Room)</button>
     </div>
 
-    <div id="room-display">
-        <div id="ui-room-id">NOT IN ROOM</div>
-        <div id="ui-my-team" style="font-size:12px; margin-top:4px;">TEAM: PENDING</div>
-    </div>
-
-    <div id="radar-container">
-        <canvas id="radar-canvas" width="140" height="140"></canvas>
-        <div id="crosshair"></div>
-    </div>
-
-    <div id="hud">
-        <div class="hud-panel">
-            <div id="ammo-text">30/30</div>
-            <div style="font-size:12px; color:#ff0055; font-weight:bold; margin-top:10px; display:flex; justify-content:space-between;">
-                <span>HEALTH</span><span id="hp-num">100%</span>
-            </div>
-            <div id="hp-container"><div id="hp-bar"></div></div>
+    <div id="weapon-menu">
+        <h2 style="color: #ffaa00; text-shadow: 0 0 8px rgba(255,170,0,0.4);">選擇戰術裝備部署</h2>
+        <div class="weapon-options">
+            <button class="w-btn" onclick="deployAgent('RIFLE')">
+                <span>突擊步槍 AR-15 Custom</span><span>[全自動]</span>
+            </button>
+            <button class="w-btn" onclick="deployAgent('SHOTGUN')">
+                <span>戰術散彈槍 M870</span><span>[高近戰爆發]</span>
+            </button>
+            <button class="w-btn" onclick="deployAgent('SNIPER')">
+                <span>重型狙擊槍 AWM</span><span>[遠距一擊致命]</span>
+            </button>
         </div>
     </div>
 
-    <div id="login-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, #0a1128 0%, #02040a 100%); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; color: white; font-family: 'Segoe UI', Arial, sans-serif;">
-        <div style="background: rgba(5, 12, 28, 0.9); border: 2px solid #00ffcc; padding: 40px; border-radius: 16px; text-align: center; box-shadow: 0 0 30px rgba(0,255,204,0.3); width: 350px;">
-            <h2 style="margin: 0 0 10px 0; color: #00ffcc; letter-spacing: 2px; text-shadow: 0 0 10px #00ffcc;">🤖 CYBER REALM</h2>
-            <p style="font-size: 11px; color: #6688a3; margin-bottom: 30px; text-transform: uppercase; letter-spacing: 1px;">量子位移・團隊對抗系統</p>
-            
-            <button id="create-room-btn" style="width: 100%; padding: 12px; font-size: 15px; background: transparent; border: 1px solid #ff00ff; color: #ff00ff; cursor: pointer; font-weight: bold; border-radius: 6px; text-transform: uppercase; margin-bottom: 20px; transition: 0.2s; box-shadow: 0 0 10px rgba(255,0,255,0.1);">➕ 建立全新對抗房間</button>
-            
-            <div style="display: flex; align-items: center; margin-bottom: 20px;">
-                <hr style="flex: 1; border: 0; border-top: 1px solid #223e5a;"><span style="padding: 0 10px; font-size: 11px; color: #446688;">或 加入現有房號</span><hr style="flex: 1; border: 0; border-top: 1px solid #223e5a;">
-            </div>
-
-            <input type="text" id="room-id-input" placeholder="輸入 6 位數房間碼..." style="padding: 12px; width: 100%; font-size: 15px; border: 1px solid #223e5a; background: #040814; color: #00ffcc; text-align: center; border-radius: 6px; margin-bottom: 15px; box-sizing: border-box; font-weight: bold; letter-spacing: 2px;">
-            <input type="text" id="username-input" placeholder="設定你的戰鬥暱稱..." style="padding: 12px; width: 100%; font-size: 15px; border: 1px solid #223e5a; background: #040814; color: #fff; text-align: center; border-radius: 6px; margin-bottom: 25px; box-sizing: border-box;">
-            
-            <button id="join-room-btn" style="width: 100%; padding: 14px; font-size: 16px; background: #00ffcc; border: none; cursor: pointer; font-weight: bold; border-radius: 6px; color: #02040a; text-transform: uppercase; box-shadow: 0 0 15px #00ffcc;">⚡ 進入備戰大廳</button>
+    <div id="game-hud">
+        <div class="hud-row">
+            <span>TEAM: <span id="hud-team" style="color:#00e5ff">-</span></span>
+            <span>HP: <span id="hud-hp" style="color:#ff3333">100</span></span>
+        </div>
+        <div id="hp-container">
+            <div id="hp-bar"></div>
         </div>
     </div>
 
-    <div id="weapon-overlay">
-        <h2 style="color: white; font-family: monospace; letter-spacing: 2px; text-shadow: 0 0 10px rgba(255,255,255,0.3);">選擇本局戰術武器配備</h2>
-        <div class="weapon-card-container">
-            <div class="weapon-btn" data-gun="RIFLE">
-                <h3>突擊步槍</h3><p>彈匣: 30 發<br>威力: 中等<br>適合中近距離壓制</p>
-            </div>
-            <div class="weapon-btn" data-gun="SHOTGUN">
-                <h3>散彈槍</h3><p>彈匣: 8 發<br>威力: 巨大<br>近戰多重射線爆發</p>
-            </div>
-            <div class="weapon-btn" data-gun="SNIPER">
-                <h3>電磁狙擊槍</h3><p>彈匣: 5 發<br>威力: 致命<br>右鍵極致開鏡</p>
-            </div>
-        </div>
-    </div>
-
-    <div id="victory-overlay">
-        <div id="victory-title">MATCH OVER</div>
-        <div id="victory-details" style="font-size: 20px; color: #88a3b7; margin-bottom: 30px;">正在讀取最終戰果...</div>
-        <div style="font-size: 14px; color: #ff00ff; animation: blink 1.5s infinite;">⚡ 系統正在重置時空矩陣，請稍候...</div>
+    <div id="game-crosshair">
+        <div class="ch-line ch-v ch-t"></div>
+        <div class="ch-line ch-v ch-b"></div>
+        <div class="ch-line ch-h ch-l"></div>
+        <div class="ch-line ch-h ch-r"></div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
     <script src="/socket.io/socket.io.js"></script>
+    
     <script src="app.js"></script>
+
 </body>
 </html>
