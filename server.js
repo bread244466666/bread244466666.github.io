@@ -20,7 +20,16 @@ const io = socketIo(server, {
 const PORT = process.env.PORT || 3000;
 
 // 掛載前端靜態檔案目錄 (確保能存取 app.js, index.html)
-app.use(express.static(path.join(__dirname, 'public')));
+// =========================================================================
+// 修正：沿用舊方法，直接將當前最外層目錄設為網頁根目錄
+// =========================================================================
+// 讓 Express 直接在最外層尋找 index.html 與 app.js
+app.use(express.static(__dirname)); 
+
+// 萬無一失的首頁絕對路徑導向（直接讀取同級目錄下的 index.html）
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // =========================================================================
 // 1. 全局遊戲世界狀態機 (WORLD STATE MACHINE)
