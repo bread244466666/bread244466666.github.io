@@ -160,8 +160,17 @@ io.on('connection', (socket) => {
         }
     });
 
+    // 🎯 正確的後端轉發開槍邏輯
     socket.on('playerFire', (data) => {
-        if (currentRoomId) io.to(currentRoomId).emit('playerFiredRadar', { id: socket.id, x: data.x, z: data.z });
+        if (currentRoomId) {
+            // 1. 原本的小地圖雷達發射
+            io.to(currentRoomId).emit('playerFiredRadar', { id: socket.id, x: data.x, z: data.z });
+            
+            // 2. 如果前端有傳 3D 彈道軌跡，原封不動廣播發送給同房間的所有人（包含開槍者自己）
+            if (data.bulletPath) {
+                io.to(currentRoomId).emit('bulletRender', { id: socket.id, path: data.bulletPath });
+            }
+        }
     });
 
     socket.on('playerShot', (targetId) => {
@@ -192,36 +201,6 @@ io.on('connection', (socket) => {
             }
         }
     });
-    // ⚡ 監聽全房間的子彈軌跡廣播並進行 3D 渲染
-socket.on('bulletRender', (data) => {
-    // 🔍 確保全域或本地能存取到 Three.js 的 scene 物件
-    const currentScene = window.scene || (typeof scene !== 'undefined' ? scene : null);
-    if (!currentScene) return;
-
-    // 🎨 設定子彈線段材質（青色/發光感，可依喜好換成 0xffff00 黃色）
-    const material = new THREE.LineBasicMaterial({ 
-        color: 0x00ffcc, 
-        linewidth: 2 // 注意：部分瀏覽器限制外觀寬度固定為 1
-    });
-
-    // 📍 提取後端轉發過來的純數字座標，轉換為 Three.js 的 Vector3 點陣列
-    const points = [
-        new THREE.Vector3(data.path.from.x, data.path.from.y, data.path.from.z),
-        new THREE.Vector3(data.path.to.x, data.path.to.y, data.path.to.z)
-    ];
-    
-    // 🏗️ 建立線段幾何體並加入場景
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const line = new THREE.Line(geometry, material);
-    currentScene.add(line);
-
-    // ⏱️ 80 毫秒後將線段從 3D 場景移除並釋放記憶體，形成閃爍的雷射特效
-    setTimeout(() => { 
-        currentScene.remove(line); 
-        geometry.dispose(); 
-        material.dispose(); 
-    }, 80);
-});
 
     socket.on('disconnect', () => {
         if (currentRoomId && rooms[currentRoomId]) {
