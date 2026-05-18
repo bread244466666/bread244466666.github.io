@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CYBER NET ARENA - FPS MULTIPLAYER</title>
+    <title>CYBER ARENA - FPS MULTIPLAYER</title>
     <style>
         * {
             box-sizing: border-box;
@@ -16,318 +16,285 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background-color: #06080d;
-            font-family: 'Courier New', Courier, monospace, sans-serif;
-            color: #d1d9e6;
+            background-color: #0c0f17;
+            font-family: Arial, sans-serif;
+            color: #ffffff;
         }
 
-        /* 1. LOBBY UI - ENTERING THE ARENA (初始大廳 UI 面板) */
+        /* 初始大廳 UI：層級設定為最高 9999 確保點擊 */
         #lobby-ui {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 420px;
-            background: rgba(10, 14, 23, 0.96);
+            width: 400px;
+            background: rgb(20, 26, 38);
             border: 2px solid #00ffaa;
-            box-shadow: 0 0 35px rgba(0, 255, 170, 0.25);
             padding: 40px;
             border-radius: 8px;
             text-align: center;
-            z-index: 9000;
-        }
-        .ui-header {
-            font-size: 26px;
-            font-weight: bold;
-            letter-spacing: 4px;
-            margin-bottom: 25px;
-            color: #00ffaa;
-            text-shadow: 0 0 12px rgba(0, 255, 170, 0.6);
-        }
-        .ui-subtitle {
-            font-size: 11px;
-            color: #697c9a;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 30px;
-            border-bottom: 1px dashed #223147;
-            padding-bottom: 10px;
-        }
-        .input-group {
-            margin-bottom: 30px;
-            text-align: left;
-        }
-        .input-label {
-            font-size: 11px;
-            color: #00ffaa;
-            margin-bottom: 8px;
+            z-index: 9999;
             display: block;
-            letter-spacing: 1px;
+        }
+        .ui-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #00ffaa;
+            letter-spacing: 2px;
         }
         input[type="text"] {
             width: 100%;
-            padding: 15px;
-            background: #0d121c;
-            border: 1px solid #1f2d42;
+            padding: 12px;
+            background: #141a26;
+            border: 1px solid #323f57;
             color: #ffffff;
             font-size: 16px;
-            font-family: inherit;
             border-radius: 4px;
-            outline: none;
+            margin-bottom: 24px;
             text-align: center;
+            outline: none;
         }
-        .action-button {
+        .menu-btn {
             width: 100%;
-            padding: 16px;
+            padding: 14px;
             background: #00ffaa;
             border: none;
-            color: #05070a;
+            color: #000000;
             font-size: 16px;
             font-weight: bold;
-            letter-spacing: 2px;
             border-radius: 4px;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0, 255, 170, 0.2);
         }
-        .action-button:hover {
+        .menu-btn:hover {
             background: #00ffcc;
-            box-shadow: 0 0 25px rgba(0, 255, 170, 0.5);
         }
 
-        /* 2. WEAPON MENU - LOADOUT SELECTION (武器出擊部署選單) */
+        /* 武器部署選單：初始狀態強制隱藏 */
         #weapon-menu {
             display: none;
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 460px;
-            background: rgba(8, 10, 15, 0.98);
+            width: 400px;
+            background: rgb(20, 26, 38);
             border: 2px solid #ffaa00;
-            box-shadow: 0 0 40px rgba(255, 170, 0, 0.3);
             padding: 35px;
             border-radius: 8px;
-            z-index: 8000;
             text-align: center;
+            z-index: 9998;
         }
-        .weapon-list {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            margin-top: 25px;
-        }
-        .weapon-card {
-            background: #111520;
+        .weapon-btn {
+            width: 100%;
+            padding: 14px;
+            background: #1a2333;
             border: 1px solid #ffaa00;
             color: #ffaa00;
-            padding: 18px 25px;
             font-size: 15px;
-            font-family: inherit;
             font-weight: bold;
+            margin-bottom: 12px;
             border-radius: 4px;
             cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
-        .weapon-card:hover {
+        .weapon-btn:hover {
             background: #ffaa00;
-            color: #05070a;
-            box-shadow: 0 0 15px rgba(255, 170, 0, 0.4);
-        }
-        .weapon-desc {
-            font-size: 11px;
-            opacity: 0.8;
+            color: #000000;
         }
 
-        /* 3. IN-GAME HUD (戰場抬頭顯示器) */
+        /* 戰場 HUD 抬頭顯示 */
         #hud-container {
             position: absolute;
             bottom: 40px;
             left: 40px;
-            width: 320px;
+            width: 300px;
             z-index: 500;
             pointer-events: none;
             display: none;
         }
-        .hud-header {
+        .hud-text {
             display: flex;
             justify-content: space-between;
-            font-size: 15px;
+            font-size: 14px;
             font-weight: bold;
-            margin-bottom: 8px;
-            text-shadow: 2px 2px 2px #000;
+            margin-bottom: 6px;
         }
-        .health-track {
+        .hp-bar-bg {
             width: 100%;
-            height: 14px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            height: 12px;
+            background: rgba(255, 255, 255, 0.1);
             border-radius: 3px;
             overflow: hidden;
-            padding: 1px;
         }
-        .health-fill {
+        .hp-bar-fill {
             width: 100%;
             height: 100%;
-            background: linear-gradient(90deg, #ff2233, #ff5566);
-            transition: width 0.1s linear;
+            background: #ff3344;
+            transition: width 0.1s ease;
         }
 
-        /* 畫面中央精準準星 */
-        #tactical-crosshair {
+        /* 正中央十字準星 */
+        #crosshair {
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 16px;
-            height: 16px;
+            width: 10px;
+            height: 10px;
             transform: translate(-50%, -50%);
             pointer-events: none;
             z-index: 1000;
             display: none;
         }
-        .crosshair-center {
-            position: absolute;
-            top: 6px;
-            left: 6px;
+        .crosshair-dot {
             width: 4px;
             height: 4px;
             background: #00ffaa;
             border-radius: 50%;
-            box-shadow: 0 0 4px #00ffaa;
+            margin: 3px;
         }
 
-        /* 實時擊殺公告流 */
-        #kill-feed-box {
+        /* 擊殺公告流 */
+        #kill-feed {
             position: absolute;
-            top: 30px;
-            right: 30px;
-            width: 350px;
-            max-height: 200px;
-            overflow: hidden;
+            top: 20px;
+            right: 20px;
+            width: 300px;
             z-index: 600;
             pointer-events: none;
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 5px;
             align-items: flex-end;
         }
-        .kill-msg {
-            background: rgba(12, 17, 26, 0.85);
-            border-right: 4px solid #ff3344;
-            padding: 8px 15px;
+        .feed-item {
+            background: rgba(15, 20, 31, 0.85);
+            padding: 6px 12px;
             font-size: 12px;
-            animation: slideIn 0.2s ease forwards;
-            text-shadow: 1px 1px 1px #000;
-        }
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
+            border-right: 4px solid #ff3344;
+            border-radius: 2px 0 0 2px;
         }
     </style>
 </head>
 <body>
 
     <div id="lobby-ui">
-        <div class="ui-header">CYBER ARENA</div>
-        <div class="ui-subtitle">Multiplayer FPS Stable Mode</div>
-        <div class="input-group">
-            <label class="input-label">AGENT IDENTIFICATION TAG</label>
-            <input type="text" id="player-name" value="Agent_Tactical" maxlength="14">
-        </div>
-        <button class="action-button" onclick="executeGlobalJoinQueue()">建立 / 加入房間 (MAKE ROOM)</button>
+        <div class="ui-title">CYBER ARENA</div>
+        <input type="text" id="player-name" value="Agent_01" maxlength="12">
+        <button class="menu-btn" onclick="triggerJoinQueue()">建立 / 加入房間 (JOIN ROOM)</button>
     </div>
 
     <div id="weapon-menu">
-        <div class="ui-header" style="color: #ffaa00;">LOADOUT MANIFEST</div>
-        <div class="ui-subtitle" style="border-color: #402c05;">Select Weapon System to Deploy</div>
-        <div class="weapon-list">
-            <button class="weapon-card" onclick="executeGlobalDeploy('RIFLE')">
-                <span>RIFLE / 突擊步槍</span><span class="weapon-desc">[AUTOMATIC]</span>
-            </button>
-            <button class="weapon-card" onclick="executeGlobalDeploy('SHOTGUN')">
-                <span>SHOTGUN / 散彈槍</span><span class="weapon-desc">[BURST]</span>
-            </button>
-            <button class="weapon-card" onclick="executeGlobalDeploy('SNIPER')">
-                <span>SNIPER / 狙擊槍</span><span class="weapon-desc">[ONE-SHOT]</span>
-            </button>
-        </div>
+        <div class="ui-title" style="color: #ffaa00;">SELECT WEAPON</div>
+        <button class="weapon-btn" onclick="triggerDeploy('RIFLE')">RIFLE (突擊步槍)</button>
+        <button class="weapon-btn" onclick="triggerDeploy('SHOTGUN')">SHOTGUN (散彈槍)</button>
+        <button class="weapon-btn" onclick="triggerDeploy('SNIPER')">SNIPER (狙擊槍)</button>
     </div>
 
     <div id="hud-container">
-        <div class="hud-header">
-            <span>TEAM: <span id="hud-team-tag" style="color: #00ffaa;">-</span></span>
-            <span>HP: <span id="hud-hp-val" style="color: #ff3344;">100</span></span>
+        <div class="hud-text">
+            <span>TEAM: <span id="hud-team">-</span></span>
+            <span>HP: <span id="hud-hp">100</span></span>
         </div>
-        <div class="health-track">
-            <div id="hud-hp-bar" class="health-fill"></div>
+        <div class="hp-bar-bg">
+            <div id="hp-fill" class="hp-bar-fill"></div>
         </div>
     </div>
 
-    <div id="tactical-crosshair">
-        <div class="crosshair-center"></div>
+    <div id="crosshair">
+        <div class="crosshair-dot"></div>
     </div>
 
-    <div id="kill-feed-box"></div>
+    <div id="kill-feed"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
 
     <script>
-        // 觸發前端大廳入口函數
-        function executeGlobalJoinQueue() {
+        // 大廳按鈕觸發程序
+        function triggerJoinQueue() {
+            // 優先執行你原本 app.js 裡的連線函數
             if (typeof window.joinQueue === 'function') {
                 window.joinQueue();
-            } else {
-                alert("錯誤：找不到 app.js 內宣告的 joinQueue 函數，請確保 app.js 與此檔案位於同一個目錄下。");
+            }
+            
+            // 安全機制：如果 app.js 中沒有將函數暴露到 window，直接用通訊實例發送封包
+            const currentSocket = window.socket || (typeof socket !== 'undefined' ? socket : null);
+            if (currentSocket) {
+                const nameInput = document.getElementById('player-name').value;
+                currentSocket.emit('joinRoom', { name: nameInput });
             }
         }
 
-        // 觸發武器部署與 HUD 展示
-        function executeGlobalDeploy(weaponType) {
+        // 部署出擊按鈕觸發程序
+        function triggerDeploy(weaponType) {
+            // 點擊後，無條件在 HTML 端立即隱藏武器選單，防止阻擋 3D 滑鼠視角控制
+            document.getElementById('weapon-menu').style.display = 'none';
+            
+            // 開啟十字準星與血量 HUD
+            document.getElementById('hud-container').style.display = 'block';
+            document.getElementById('crosshair').style.display = 'block';
+
             if (typeof window.deployAgent === 'function') {
                 window.deployAgent(weaponType);
-                document.getElementById('hud-container').style.display = 'block';
-                document.getElementById('tactical-crosshair').style.display = 'block';
+            } else {
+                const currentSocket = window.socket || (typeof socket !== 'undefined' ? socket : null);
+                if (currentSocket) {
+                    currentSocket.emit('selectWeaponAndDeploy', { weapon: weaponType });
+                }
             }
         }
 
-        // 監聽並攔截 Socket 通訊來動態更新 HTML 的網頁 HUD 與擊殺看板
+        // 獨立網路攔截層：專門用來強制切換 UI DOM 物件狀態
         window.addEventListener('load', () => {
             if (typeof io !== 'undefined') {
-                // 由於 socket 變數通常在 app.js 中初始化，我們在一秒後綁定事件監聽
-                setTimeout(() => {
-                    const activeSocket = window.socket || (typeof socket !== 'undefined' ? socket : null);
-                    if (activeSocket) {
-                        // 監聽擊殺流
-                        activeSocket.on('killFeed', (data) => {
-                            const box = document.getElementById('kill-feed-box');
-                            if (box) {
-                                const item = document.createElement('div');
-                                item.className = 'kill-msg';
-                                item.innerHTML = `<span style="color:#ff3344;">${data.attackerName}</span> 🎯 eliminated <span style="color:#00ffaa;">${data.targetName}</span>`;
-                                box.appendChild(item);
-                                setTimeout(() => item.remove(), 4000);
+                const checkSocketLoop = setInterval(() => {
+                    const currentSocket = window.socket || (typeof socket !== 'undefined' ? socket : null);
+                    if (currentSocket) {
+                        clearInterval(checkSocketLoop);
+                        console.log("[UI SYSTEM] Network core hooked successfully.");
+
+                        // 核心修復點：一旦接獲伺服器端 init 成功通知，強制隱藏大廳、開啟選單
+                        currentSocket.on('init', (data) => {
+                            console.log("[UI SYSTEM] Arena joined. Switching display visibility.");
+                            document.getElementById('lobby-ui').style.display = 'none';
+                            document.getElementById('weapon-menu').style.display = 'block';
+                            
+                            const teamText = document.getElementById('hud-team');
+                            if (teamText) teamText.innerText = data.team;
+                        });
+
+                        // 傷害與治癒血條同步
+                        currentSocket.on('playerHurt', (data) => {
+                            if (data.id === currentSocket.id) {
+                                const hpText = document.getElementById('hud-hp');
+                                const hpFill = document.getElementById('hp-fill');
+                                if (hpText) hpText.innerText = data.hp;
+                                if (hpFill) hpFill.style.width = data.hp + '%';
                             }
                         });
 
-                        // 監聽受傷血條同步
-                        activeSocket.on('playerHurt', (data) => {
-                            if (data.id === activeSocket.id) {
-                                const hpVal = document.getElementById('hud-hp-val');
-                                const hpBar = document.getElementById('hud-hp-bar');
-                                if (hpVal) hpVal.innerText = data.hp;
-                                if (hpBar) hpBar.style.width = data.hp + '%';
+                        // 被擊殺後死亡，重新彈回武器部署介面
+                        currentSocket.on('playerDead', (data) => {
+                            if (data.id === currentSocket.id) {
+                                document.getElementById('hud-container').style.display = 'none';
+                                document.getElementById('crosshair').style.display = 'none';
+                                document.getElementById('weapon-menu').style.display = 'block';
                             }
                         });
 
-                        // 監聽並同步隊伍標籤
-                        activeSocket.on('init', (data) => {
-                            const teamTag = document.getElementById('hud-team-tag');
-                            if (teamTag) teamTag.innerText = data.team;
+                        // 擊殺流動態生成
+                        currentSocket.on('killFeed', (data) => {
+                            const feedBox = document.getElementById('kill-feed');
+                            if (feedBox) {
+                                const feed = document.createElement('div');
+                                feed.className = 'feed-item';
+                                feed.innerHTML = `<span style="color:#ff3344;">${data.attackerName}</span> 🎯 ${data.targetName}`;
+                                feedBox.appendChild(feed);
+                                setTimeout(() => feed.remove(), 4000);
+                            }
                         });
                     }
-                }, 1000);
+                }, 100);
             }
         });
     </script>
