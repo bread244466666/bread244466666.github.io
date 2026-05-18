@@ -194,8 +194,8 @@
         const floorGeo = new THREE.PlaneGeometry(arenaSize, arenaSize, 1, 1);
         const floorMat = new THREE.MeshStandardMaterial({
             color: 0x11131a,
-            roughness: 0.65,
-            metalness: 0.2
+            roughness: 0.8,
+            metalness: 0.1
         });
         const floor = new THREE.Mesh(floorGeo, floorMat);
         floor.rotation.x = -Math.PI / 2;
@@ -226,7 +226,41 @@
             wallMesh.receiveShadow = true;
             wallMesh.castShadow = true;
             scene.add(wallMesh);
-            obstacles.push(wallMesh); // 塞入 AABB 實體牆壁碰撞陣列
+            obstacles.push(wallMesh);
+        });
+
+        // 4. 新增：戰術掩體與高台矩陣 (Tactical Obstacles & Elevated Platforms)
+        const obstacleMat = new THREE.MeshStandardMaterial({ color: 0x1c2333, roughness: 0.4, metalness: 0.5 });
+        const platformMat = new THREE.MeshStandardMaterial({ color: 0x28354d, roughness: 0.6, metalness: 0.3 });
+
+        const mapStructures = [
+            // 中央黃金對決高台 (對應物理跳躍高度 Y=1.2 設計)
+            { w: 12, h: 1.2, d: 12, x: 0, y: 0.6, z: 0, mat: platformMat },
+            { w: 4, h: 2.4, d: 4, x: 0, y: 1.2, z: 0, mat: obstacleMat }, // 高台中央的圓柱核心掩體
+
+            // 四周戰術十字掩體壁壘
+            { w: 6, h: 2.2, d: 1.5, x: -15, y: 1.1, z: -15, mat: obstacleMat },
+            { w: 1.5, h: 2.2, d: 6, x: -15, y: 1.1, z: -12, mat: obstacleMat },
+
+            { w: 6, h: 2.2, d: 1.5, x: 15, y: 1.1, z: 15, mat: obstacleMat },
+            { w: 1.5, h: 2.2, d: 6, x: 15, y: 1.1, z: 12, mat: obstacleMat },
+
+            { w: 1.5, h: 2.2, d: 8, x: -25, y: 1.1, z: 20, mat: obstacleMat },
+            { w: 8, h: 2.2, d: 1.5, x: 25, y: 1.1, z: -20, mat: obstacleMat },
+
+            // 長距離阻絕狙擊邊牆
+            { w: 20, h: 4.0, d: 3, x: -45, y: 2.0, z: -5, mat: platformMat },
+            { w: 20, h: 4.0, d: 3, x: 45, y: 2.0, z: 5, mat: platformMat }
+        ];
+
+        mapStructures.forEach(struct => {
+            const geo = new THREE.BoxGeometry(struct.w, struct.h, struct.d);
+            const mesh = new THREE.Mesh(geo, struct.mat);
+            mesh.position.set(struct.x, struct.y, struct.z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+            obstacles.push(mesh); // 全數登錄至 AABB 物理引擎
         });
     }
 
