@@ -1,129 +1,209 @@
-// =========================================================================
-// MULTIPLAYER FIRST-PERSON SHOOTER CORE ENGINE - BACKEND (server.js)
-// =========================================================================
-
 const express = require('express');
-const http = require('http');
-const socketIo = require('socket.io');
-const path = require('path');
-
-// 1. 初始化伺服器與路由配置 (Server Setup)
 const app = express();
-const server = http.createServer(app);
-const io = socketIo(server, {
-    cors: {
-        origin: "*", // 允許所有來源連接以利雲端部署 (如 Render)
-        methods: ["GET", "POST"]
+const http = require('http').createServer(app);
+const io = require('socket.io')(http, { cors: { origin: "*" } });
+
+app.use(express.static(__dirname));
+
+const rooms = {};
+const MATCH_DURATION = 180; // 每一局 180 秒 (3 分鐘)
+
+const MAPS = {
+    "Neon_Arena": [
+        { x: 0, y: 1.5, z: 0, w: 3, h: 3, d: 3, color: 0x00ffcc },    
+        { x: -8, y: 2, z: -8, w: 2, h: 4, d: 4, color: 0xff00ff }, 
+        { x: 8, y: 1, z: -6, w: 4, h: 2, d: 2, color: 0xffff00 },   
+        { x: -6, y: 2.5, z: 6, w: 2, h: 5, d: 2, color: 0x00ffff },   
+        { x: 7, y: 2, z: 7, w: 3, h: 4, d: 3, color: 0xff3300 }
+    ]
+};
+
+function getSpawnY(x, z, obstacles) {
+    let groundY = 0; 
+    for (let obs of obstacles) {
+        const halfW = obs.w / 2; const halfD = obs.d / 2;
+        if (x >= obs.x - halfW - 0.4 && x <= obs.x + halfW + 0.4 && z >= obs.z - halfD - 0.4 && z <= obs.z + halfD + 0.4) {
+            const obsTopY = obs.y + (obs.h / 2);
+            if (obsTopY > groundY) groundY = obsTopY; 
+        }
     }
-});
+    return groundY + 1.6;
+}
 
-const PORT = process.env.PORT || 3000;
+// 啟動計時器計時與結算邏輯
+function startRoomTimer(roomId) {
+    if (!rooms[roomId]) return;
+    
+    rooms[roomId].timerInterval = setInterval(() => {
+        const room = rooms[roomId];
+        if (!room) { clearInterval(this); return; }
 
-// 靜態檔案路由：將前端目錄 (public) 暴露給瀏覽器
+        room.timeLeft--;
+        io.to(roomId).emit('timeUpdate', room.timeLeft);
 
-// =====================================================================
-// 2. 伺服器全局狀態管理機 (SERVER GLOBAL STATE)
-// =====================================================================
-// 儲存所有在線玩家的即時動態數據
-const globalPlayersState = {};
+        if (room.timeLeft <= 0) {
+            clearInterval(room.timerInterval);
+            
+            // 判定勝負
+            let winner = "DRAW";
+            if (room.scores.ALPHA > room.scores.OMEGA) winner = "ALPHA";
+            else if (room.scores.OMEGA > room.scores.ALPHA) winner = "OMEGA";
 
-// 模擬玩家名字庫，用於隨機生成擊殺通知
-const TACTICAL_NAMES = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Ghost", "Viper", "Specter"];
+            io.to(roomId).emit('matchOver', {
+                winner: winner,
+                scores: room.scores
+            });
 
-// =====================================================================
-// 3. SOCKET.IO 即時網路事件通訊中樞 (NETWORKING RECEPTOR)
-// =====================================================================
+            // 5 秒後自動重置戰局
+            setTimeout(() => {
+                if (rooms[roomId]) {
+                    rooms[roomId].timeLeft = MATCH_DURATION;
+                    rooms[roomId].scores = { ALPHA: 0, OMEGA: 0 };
+                    
+                    // 將所有人解除部署，重新彈出選槍畫面
+                    for (let pId in rooms[roomId].players) {
+                        rooms[roomId].players[pId].isDeployed = false;
+                        rooms[roomId].players[pId].hp = 100;
+                    }
+                    io.to(roomId).emit('matchReset', rooms[roomId].players);
+                    startRoomTimer(roomId);
+                }
+            }, 5000);
+        }
+    }, 1000);
+}
+
 io.on('connection', (socket) => {
-    const playerId = socket.id;
-    
-    // 隨機分配一個戰術代號與預設座標
-    const playerRandomName = TACTICAL_NAMES[Math.floor(Math.random() * TACTICAL_NAMES.length)] + `_${Math.floor(100 + Math.random() * 900)}`;
-    
-    console.log(`[CONNECTED] Agent ${playerRandomName} entered the grid. ID: ${playerId}`);
+    let currentRoomId = null;
 
-    // A. 初始化玩家狀態
-    globalPlayersState[playerId] = {
-        id: playerId,
-        name: playerRandomName,
-        x: (Math.random() - 0.5) * 20, // 隨機分散出生點避免重疊
-        y: 1.6,                       // 基準高度對應 eyeHeight
-        z: (Math.random() - 0.5) * 20,
-        yaw: 0,
-        health: 100
-    };
+    socket.on('createRoom', () => {
+        const roomId = Math.floor(100000 + Math.random() * 900000).toString();
+        rooms[roomId] = {
+            id: roomId,
+            mapName: "Neon_Arena",
+            obstacles: MAPS["Neon_Arena"],
+            players: {},
+            scores: { ALPHA: 0, OMEGA: 0 },
+            timeLeft: MATCH_DURATION
+        };
+        socket.emit('roomCreated', roomId);
+        startRoomTimer(roomId);
+    });
 
-    // B. 向剛連線的客戶端發送其專屬身分識別
-    socket.emit('init', { id: playerId, name: playerRandomName });
+    socket.on('joinRoom', (data) => {
+        const { roomId, name } = data;
+        if (!rooms[roomId]) {
+            socket.emit('joinError', '戰局房間不存在！');
+            return;
+        }
 
-    // C. 異步接收客戶端物理運動矩陣更新 (High-frequency position update)
+        currentRoomId = roomId;
+        socket.join(roomId);
+        const room = rooms[roomId];
+
+        // 隨機動態分組演算法（人數動態平衡）
+        let alphaCount = 0; let omegaCount = 0;
+        for (let pId in room.players) {
+            if (room.players[pId].team === "ALPHA") alphaCount++;
+            if (room.players[pId].team === "OMEGA") omegaCount++;
+        }
+        const assignedTeam = (alphaCount <= omegaCount) ? "ALPHA" : "OMEGA";
+
+        const customName = name || `Agent_${socket.id.substring(0, 4)}`;
+        room.players[socket.id] = {
+            id: socket.id,
+            name: customName,
+            team: assignedTeam,
+            x: 0, y: 1.6, z: 0, ry: 0, hp: 100,
+            weapon: "RIFLE",
+            isDeployed: false
+        };
+
+        // 初始化前端資料
+        socket.emit('init', { 
+            id: socket.id, 
+            playerList: room.players, 
+            obstacles: room.obstacles,
+            roomId: roomId,
+            team: assignedTeam,
+            scores: room.scores,
+            timeLeft: room.timeLeft
+        });
+    });
+
+    socket.on('selectWeaponAndDeploy', (data) => {
+        if (!currentRoomId || !rooms[currentRoomId]) return;
+        const room = rooms[currentRoomId];
+        const p = room.players[socket.id];
+        if (!p) return;
+
+        // 依據不同隊伍設定左右兩端不同的安全重生基地位置
+        const spawnX = p.team === "ALPHA" ? -10 + (Math.random() * 3) : 10 - (Math.random() * 3);
+        const spawnZ = (Math.random() - 0.5) * 12;
+        const spawnY = getSpawnY(spawnX, spawnZ, room.obstacles);
+
+        p.x = spawnX; p.y = spawnY; p.z = spawnZ;
+        p.hp = 100; p.weapon = data.weapon; p.isDeployed = true;
+
+        io.to(currentRoomId).emit('playerRespawn', { id: socket.id, info: p });
+    });
+
     socket.on('playerUpdate', (data) => {
-        if (globalPlayersState[playerId]) {
-            globalPlayersState[playerId].x = data.x;
-            globalPlayersState[playerId].y = data.y;
-            globalPlayersState[playerId].z = data.z;
-            globalPlayersState[playerId].yaw = data.yaw;
+        if (!currentRoomId || !rooms[currentRoomId]) return;
+        const p = rooms[currentRoomId].players[socket.id];
+        if (p && p.isDeployed) {
+            p.x = data.x; p.y = data.y; p.z = data.z; p.ry = data.ry;
+            socket.to(currentRoomId).emit('playerMoved', { 
+                id: socket.id, info: { x: p.x, y: p.y, z: p.z, ry: p.ry }
+            });
+            socket.emit('serverAck', { x: p.x, y: p.y, z: p.z, seq: data.seq });
         }
     });
 
-    // D. 接收開火事件 (可擴充用於伺服器端音效廣播或防作弊驗證)
-    socket.on('playerFire', () => {
-        // 可以在此向周圍玩家發送開火音效事件廣播
+    socket.on('playerFire', (data) => {
+        if (currentRoomId) io.to(currentRoomId).emit('playerFiredRadar', { id: socket.id, x: data.x, z: data.z });
     });
 
-    // E. 核心射擊命中判定解碼 (Hit Registration Processing)
     socket.on('playerShot', (targetId) => {
-        const attacker = globalPlayersState[playerId];
-        const target = globalPlayersState[targetId];
+        if (!currentRoomId || !rooms[currentRoomId]) return;
+        const room = rooms[currentRoomId];
+        const attacker = room.players[socket.id];
+        const target = room.players[targetId];
 
-        if (attacker && target) {
-            console.log(`[HIT] ${attacker.name} hit ${target.name}`);
-            
-            // 扣除敵方生命值 (可依據前端武器庫設計進行不同的傷害加權)
-            target.health -= 25; 
+        // 核心安全鎖：禁止隊友傷害（Friendly Fire Block）且目標必須處於部署狀態
+        if (attacker && target && target.hp > 0 && target.isDeployed) {
+            if (attacker.team === target.team) return; 
 
-            // 判定擊殺
-            if (target.health <= 0) {
-                console.log(`[KILL] ${attacker.name} eliminated ${target.name}`);
+            let damage = attacker.weapon === "SHOTGUN" ? 25 : (attacker.weapon === "SNIPER" ? 100 : 15);
+            target.hp -= damage;
+
+            if (target.hp <= 0) {
+                target.hp = 0; target.isDeployed = false;
                 
-                // 向全服廣播擊殺動態通知欄 (Killfeed)
-                io.emit('killEvent', {
-                    attacker: attacker.name,
-                    target: target.name
+                // 增加擊殺隊伍的積分
+                room.scores[attacker.team]++;
+                
+                io.to(currentRoomId).emit('scoreUpdate', room.scores);
+                io.to(currentRoomId).emit('playerDead', { id: targetId });
+            } else {
+                io.to(currentRoomId).emit('playerHurt', { 
+                    id: targetId, targetName: target.name, hp: target.hp, attackerX: attacker.x, attackerZ: attacker.z
                 });
-
-                // 重置被擊殺玩家狀態 (Respawn 物理復位)
-                target.health = 100;
-                target.x = (Math.random() - 0.5) * 30;
-                target.z = (Math.random() - 0.5) * 30;
-                target.y = 1.6;
             }
         }
     });
 
-    // F. 斷線清理機制 (Connection Cleanup)
     socket.on('disconnect', () => {
-        if (globalPlayersState[playerId]) {
-            console.log(`[DISCONNECTED] Agent ${globalPlayersState[playerId].name} left the battlefield.`);
-            delete globalPlayersState[playerId];
+        if (currentRoomId && rooms[currentRoomId]) {
+            delete rooms[currentRoomId].players[socket.id];
+            io.to(currentRoomId).emit('playerLeft', socket.id);
+            if (Object.keys(rooms[currentRoomId].players).length === 0) {
+                clearInterval(rooms[currentRoomId].timerInterval);
+                delete rooms[currentRoomId];
+            }
         }
     });
 });
 
-// =====================================================================
-// 4. 定時高頻率世界狀態廣播循環 (TICK RATE HEARTBEAT - 60Hz)
-// =====================================================================
-// 以每秒 60 次的頻率將全服玩家的最新空間數據打包，發送給所有客戶端進行 Lerp 渲染
-const TICK_RATE = 60;
-setInterval(() => {
-    io.emit('gameState', globalPlayersState);
-}, 1000 / TICK_RATE);
-
-// =====================================================================
-// 5. 啟動後端引擎監聽端口
-// =====================================================================
-server.listen(PORT, () => {
-    console.log(`==================================================`);
-    console.log(` FPS MULTIPLAYER CORE SERVER ONLINE ON PORT: ${PORT}`);
-    console.log(` Tick Heartbeat running stable at ${TICK_RATE}Hz.`);
-    console.log(`==================================================`);
-});
+const PORT = process.env.PORT || 3000;
+http.listen(PORT, () => console.log(`🚀 團隊戰局伺服器正運作於 http://localhost:${PORT}`));
