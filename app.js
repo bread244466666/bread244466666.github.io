@@ -1013,6 +1013,35 @@
             remotePlayers[data.id].mesh.rotation.y = data.info.ry;
         }
     });
+    // ⚡ 移到 app.js：監聽全房間的子彈軌跡廣播並進行 3D 渲染
+socket.on('bulletRender', (data) => {
+    // 🔍 確保能拿到前端 Three.js 的 scene 物件
+    const currentScene = window.scene || (typeof scene !== 'undefined' ? scene : null);
+    if (!currentScene) return;
+
+    // 🎨 設定子彈線段材質
+    const material = new THREE.LineBasicMaterial({ 
+        color: 0x00ffcc, 
+        linewidth: 2 
+    });
+
+    // 📍 轉換純數字為 Three.js 的 Vector3 座標點
+    const points = [
+        new THREE.Vector3(data.path.from.x, data.path.from.y, data.path.from.z),
+        new THREE.Vector3(data.path.to.x, data.path.to.y, data.path.to.z)
+    ];
+    
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geometry, material);
+    currentScene.add(line);
+
+    // ⏱️ 80 毫秒後移除線段
+    setTimeout(() => { 
+        currentScene.remove(line); 
+        geometry.dispose(); 
+        material.dispose(); 
+    }, 80);
+});
 
     socket.on('playerHurt', (data) => {
         if (data.id === myId) {
