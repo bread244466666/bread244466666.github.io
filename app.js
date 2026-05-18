@@ -508,11 +508,11 @@
         window.addEventListener('keyup', (e) => { inputBuffer[e.code] = false; });
 
         window.addEventListener('mousedown', (e) => {
-            // 🔒 檢查是否鎖定滑鼠指標，防止在大廳或選單時誤開槍
+    // 🔒 檢查是否鎖定滑鼠指標，防止在大廳或選單時誤開槍
     if (document.pointerLockElement !== document.body) return;
     
-    // 🖱️ 檢查是否點擊滑鼠左鍵 (0 代表左鍵)
-    if (event.button === 0) {
+    // 🖱️ 檢查是否點擊滑鼠左鍵 (e.button === 0)
+    if (e.button === 0) {
         
         // 📏 A. 設定子彈發射起點 (以相機位置為基準，y 軸稍微往下調 0.2 當作模擬槍口位置)
         const fromPos = { 
@@ -539,17 +539,22 @@
             bulletPath: { from: fromPos, to: toPos }
         });
 
-            if (e.button === 0) {
-                isShooting = true; // 觸發連發半自動/全自動開火循環
-            } else if (e.button === 2) {
-                isAiming = true;   // 右鍵 ADS 舉槍機械瞄準狀態
-            }
-        });
+        // 🔄 觸發你原本的連發半自動/全自動開火循環邏輯
+        isShooting = true; 
+
+    } else if (e.button === 2) {
+        // 🔍 右鍵 ADS 舉槍機械瞄準狀態
+        isAiming = true;   
+    }
+});
 
         window.addEventListener('mouseup', (e) => {
-            if (e.button === 0) isShooting = false;
-            if (e.button === 2) isAiming = false;
-        });
+    if (e.button === 0) {
+        isShooting = false; // 停止連發循環
+    } else if (e.button === 2) {
+        isAiming = false;   // 解除機瞄狀態
+    }
+});
 
         // 二維滑鼠差值微分演算法轉換為 FPS 三維相機 Pitch/Yaw 旋轉角
         window.addEventListener('mousemove', (e) => {
