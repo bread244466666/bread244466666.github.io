@@ -508,7 +508,36 @@
         window.addEventListener('keyup', (e) => { inputBuffer[e.code] = false; });
 
         window.addEventListener('mousedown', (e) => {
-            if (document.pointerLockElement !== document.body || !isDeployed) return;
+            // 🔒 檢查是否鎖定滑鼠指標，防止在大廳或選單時誤開槍
+    if (document.pointerLockElement !== document.body) return;
+    
+    // 🖱️ 檢查是否點擊滑鼠左鍵 (0 代表左鍵)
+    if (event.button === 0) {
+        
+        // 📏 A. 設定子彈發射起點 (以相機位置為基準，y 軸稍微往下調 0.2 當作模擬槍口位置)
+        const fromPos = { 
+            x: camera.position.x, 
+            y: camera.position.y - 0.2, 
+            z: camera.position.z 
+        };
+        
+        // 🧭 B. 獲取相機目前正面向的 3D 朝向向量
+        const direction = new THREE.Vector3();
+        camera.getWorldDirection(direction);
+
+        // 🚀 C. 計算子彈往前飛行 75 個單位距離後的終點 3D 座標
+        const toPos = {
+            x: camera.position.x + direction.x * 75,
+            y: camera.position.y + direction.y * 75,
+            z: camera.position.z + direction.z * 75
+        };
+
+        // 📡 D. 將資料打包送往 server.js (包含你原本雷達用的 x, z 軸，與新的 bulletPath)
+        socket.emit('playerFire', {
+            x: camera.position.x,
+            z: camera.position.z,
+            bulletPath: { from: fromPos, to: toPos }
+        });
 
             if (e.button === 0) {
                 isShooting = true; // 觸發連發半自動/全自動開火循環
