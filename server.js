@@ -20,7 +20,6 @@ const io = socketIo(server, {
 const PORT = process.env.PORT || 3000;
 
 // 靜態檔案路由：將前端目錄 (public) 暴露給瀏覽器
-app.use(express.static(__dirname));
 
 // =====================================================================
 // 2. 伺服器全局狀態管理機 (SERVER GLOBAL STATE)
